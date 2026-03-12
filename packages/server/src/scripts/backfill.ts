@@ -1,5 +1,6 @@
 import { loadProvider, getProvider } from '../services/providerLoader.js';
-import { getCachedDetails, setCachedDetail } from '../services/database.js';
+import { getCachedDetails, setCachedDetail, getUniqueActorUrls, getCachedActor, setCachedActor } from '../services/database.js';
+import { resolveTermId, fetchAllActorVideos } from '../services/actorCache.js';
 import { proxyFetch } from '../utils/proxyFetch.js';
 import { USER_AGENT } from '../config.js';
 import type { VideoStub } from '@km-explorer/provider-types';
@@ -79,7 +80,50 @@ async function main() {
     }
   }
 
-  console.log(`[backfill] Done: ${done} processed, ${errors} errors`);
+  console.log(`[backfill] Phase 3 done: ${done} processed, ${errors} errors`);
+
+  // Phase 4: Backfill actor cache
+  console.log('[backfill] Phase 4: Backfilling actor cache...');
+  const actorUrls = getUniqueActorUrls();
+  console.log(`[backfill] Found ${actorUrls.length} unique actors`);
+
+  const ACTOR_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  let actorDone = 0;
+  let actorErrors = 0;
+  let actorSkipped = 0;
+
+  for (const actorUrl of actorUrls) {
+    const existing = getCachedActor(actorUrl);
+    if (existing && (Date.now() - existing.cachedAt) < ACTOR_CACHE_MAX_AGE_MS) {
+      actorSkipped++;
+      actorDone++;
+      if (actorDone % 10 === 0) {
+        console.log(`[backfill] Actor progress: ${actorDone}/${actorUrls.length} (${actorSkipped} skipped, ${actorErrors} errors)`);
+      }
+      continue;
+    }
+
+    try {
+      const termId = await resolveTermId(actorUrl);
+      if (termId === null) {
+        actorErrors++;
+        console.error(`[backfill] Could not resolve term ID for ${actorUrl}`);
+      } else {
+        const videos = await fetchAllActorVideos(termId);
+        setCachedActor(actorUrl, termId, videos);
+      }
+    } catch (e) {
+      actorErrors++;
+      console.error(`[backfill] Error caching actor ${actorUrl}:`, (e as Error).message);
+    }
+
+    actorDone++;
+    if (actorDone % 10 === 0) {
+      console.log(`[backfill] Actor progress: ${actorDone}/${actorUrls.length} (${actorSkipped} skipped, ${actorErrors} errors)`);
+    }
+  }
+
+  console.log(`[backfill] Phase 4 done: ${actorDone} actors, ${actorSkipped} skipped, ${actorErrors} errors`);
 }
 
 main().catch(err => {

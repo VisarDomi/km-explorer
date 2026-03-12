@@ -3,6 +3,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { getProvider } from '../services/providerLoader.js';
 import { proxyFetch } from '../utils/proxyFetch.js';
 import { USER_AGENT } from '../config.js';
+import { getActorVideos } from '../services/actorCache.js';
 import type { VideoStub, PagedResult } from '@km-explorer/provider-types';
 
 const router = Router();
@@ -84,30 +85,7 @@ router.get('/channel', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'Missing url parameter' });
     return;
   }
-  const provider = getProvider();
-
-  // Extract actor slug from URL like /actor/silent-chaos
-  const slug = url.replace(/^\/actor\//, '').replace(/\/$/, '');
-
-  // Step 1: Resolve slug → term ID via WP REST API
-  const taxonomyUrl = `${provider.baseUrl}/wp-json/wp/v2/actors?slug=${encodeURIComponent(slug)}`;
-  const taxRes = await proxyFetch(taxonomyUrl, {
-    headers: { 'User-Agent': USER_AGENT },
-  });
-  const taxData = await taxRes.json() as Array<{ id: number }>;
-  if (!Array.isArray(taxData) || taxData.length === 0) {
-    res.json({ items: [], hasMore: false });
-    return;
-  }
-  const termId = String(taxData[0].id);
-
-  // Step 2: Fetch posts for this actor term ID
-  const req2 = provider.channelRequest(termId, page);
-  const r = await proxyFetch(req2.url, {
-    headers: { 'User-Agent': USER_AGENT, ...req2.headers },
-  });
-  const data = await r.json();
-  const result = provider.parseChannelResponse(data);
+  const result = await getActorVideos(url, page);
   res.json(result);
 }));
 

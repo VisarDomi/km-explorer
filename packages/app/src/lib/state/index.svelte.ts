@@ -99,7 +99,7 @@ class AppState {
         if (this.visibleVideoDebounce) clearTimeout(this.visibleVideoDebounce);
         this.visibleVideoDebounce = setTimeout(() => {
             this.visibleVideoDebounce = null;
-            if (this.ui.viewMode === 'list') {
+            if (this.ui.viewMode === 'list' || this.ui.viewMode === 'channel') {
                 this.persistSession();
             }
         }, VISIBLE_VIDEO_DEBOUNCE_MS);
@@ -156,15 +156,18 @@ class AppState {
         }
 
         if (snapshot.viewMode === 'channel' && snapshot.activeChannel) {
-            // Restore list in background (with scroll target), then open channel
-            this.searchState.search(this.searchState.inputQuery).then(() => {
-                if (targetId) {
-                    this.restore.start(targetId);
-                    this.restore.transition('paginating-to-target');
-                    void this.bgPaginateToTarget();
-                }
-            });
+            // Restore list in background, then open channel
+            void this.searchState.search(this.searchState.inputQuery);
             await this.channel.openChannel(snapshot.activeChannel);
+
+            // Scroll to last visible video in channel view
+            if (targetId) {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        this.scrollChannelToTarget(targetId);
+                    });
+                });
+            }
             return true;
         }
 
@@ -218,6 +221,13 @@ class AppState {
             return true;
         }
         return false;
+    }
+
+    private scrollChannelToTarget(targetId: string) {
+        const card = document.querySelector(`#view-channel [data-video-id="${CSS.escape(targetId)}"]`);
+        if (card) {
+            card.scrollIntoView({ block: 'center' });
+        }
     }
 
     private showScrollToast(targetId: string) {

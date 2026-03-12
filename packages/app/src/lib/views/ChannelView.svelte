@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
     import { appState } from '$lib/state/index.svelte.js';
     import { sentinel } from '$lib/actions/sentinel.js';
     import { swipeBack } from '$lib/actions/swipeBack.js';
@@ -17,6 +18,33 @@
             const urls = videos.map(v => v.pageUrl);
             appState.videoDetails.requestDetails(urls);
         }
+    });
+
+    // Track which video card is visible at viewport center
+    onMount(() => {
+        const channelEl = document.querySelector('#view-channel .channel-content') as HTMLElement | null;
+        if (!channelEl) return;
+
+        let ticking = false;
+        function onScroll() {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+                ticking = false;
+                const centerY = window.innerHeight / 2;
+                const centerX = window.innerWidth / 2;
+                const el = document.elementFromPoint(centerX, centerY);
+                if (!el) return;
+                const card = el.closest('[data-video-id]');
+                if (card) {
+                    const id = card.getAttribute('data-video-id');
+                    if (id) appState.trackVisibleVideo(id);
+                }
+            });
+        }
+
+        channelEl.addEventListener('scroll', onScroll, { passive: true });
+        return () => channelEl.removeEventListener('scroll', onScroll);
     });
 </script>
 
