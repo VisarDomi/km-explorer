@@ -8,6 +8,7 @@ export interface SessionSnapshot {
     viewStack: ViewMode[];
     activeChannel?: { name: string; url: string };
     searchQuery?: string;
+    targetVideoId?: string;
 }
 
 export function saveSession(snapshot: SessionSnapshot): void {

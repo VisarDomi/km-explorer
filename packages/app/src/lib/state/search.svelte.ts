@@ -112,6 +112,25 @@ export class SearchState {
         return deduped;
     }
 
+    async paginateToTarget(targetId: string, signal?: AbortSignal): Promise<boolean> {
+        if (this.results.some(v => v.id === targetId)) return true;
+
+        while (this.hasMore) {
+            if (signal?.aborted) return false;
+            this.currentPage++;
+            try {
+                const added = await this.fetchAndAppendPage(this.currentPage, signal);
+                if (signal?.aborted) return false;
+                if (added.some(v => v.id === targetId)) return true;
+            } catch {
+                if (signal?.aborted) return false;
+                this.currentPage--;
+                return false;
+            }
+        }
+        return false;
+    }
+
     async loadNextPage() {
         if (this.machine.isActive || !this.hasMore) return;
 

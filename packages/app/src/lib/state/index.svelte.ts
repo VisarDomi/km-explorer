@@ -6,9 +6,45 @@ import { ChannelState } from './channel.svelte.js';
 import { VideoDetailState } from './videoDetail.svelte.js';
 import { ToastState } from './toast.svelte.js';
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from './session.js';
-import { RESUME_RECOVERY_MS, DEEP_SLEEP_MS } from '../constants.js';
+import { RESUME_RECOVERY_MS, DEEP_SLEEP_MS, VISIBLE_VIDEO_DEBOUNCE_MS, SESSION_TOAST_DURATION } from '../constants.js';
 
 export type AppStatus = 'BOOTING' | 'READY' | 'BACKGROUND' | 'RECONNECTING' | 'OFFLINE';
+
+type RestoreState = 'idle' | 'replaying-search' | 'paginating-to-target' | 'scrolling';
+
+class RestoreMachine {
+    state = $state<RestoreState>('idle');
+    private controller: AbortController | null = null;
+    targetVideoId: string | null = null;
+
+    get isActive() { return this.state !== 'idle'; }
+    get signal() { return this.controller?.signal; }
+
+    start(targetId: string) {
+        this.cancel();
+        this.targetVideoId = targetId;
+        this.controller = new AbortController();
+        this.state = 'replaying-search';
+    }
+
+    transition(next: 'paginating-to-target' | 'scrolling') {
+        if (!this.isActive) return;
+        this.state = next;
+    }
+
+    cancel() {
+        this.controller?.abort();
+        this.controller = null;
+        this.targetVideoId = null;
+        this.state = 'idle';
+    }
+
+    done() {
+        this.controller = null;
+        this.targetVideoId = null;
+        this.state = 'idle';
+    }
+}
 
 class AppState {
     ui = new UIState();
@@ -23,6 +59,11 @@ class AppState {
     private backgroundedAt = 0;
     private bgSentinelId: ReturnType<typeof setInterval> | null = null;
     private bgSentinelTick = 0;
+
+    // Scroll restore
+    private restore = new RestoreMachine();
+    private lastVisibleVideoId: string | null = null;
+    private visibleVideoDebounce: ReturnType<typeof setTimeout> | null = null;
 
     constructor() {
         this.searchState = new SearchState(
@@ -50,6 +91,20 @@ class AppState {
         });
     }
 
+    // --- Visible video tracking ---
+
+    trackVisibleVideo(videoId: string) {
+        this.lastVisibleVideoId = videoId;
+
+        if (this.visibleVideoDebounce) clearTimeout(this.visibleVideoDebounce);
+        this.visibleVideoDebounce = setTimeout(() => {
+            this.visibleVideoDebounce = null;
+            if (this.ui.viewMode === 'list') {
+                this.persistSession();
+            }
+        }, VISIBLE_VIDEO_DEBOUNCE_MS);
+    }
+
     // --- Session persistence ---
 
     private persistSession() {
@@ -64,6 +119,11 @@ class AppState {
 
         if (this.searchState.currentQuery) {
             snapshot.searchQuery = this.searchState.currentQuery;
+        }
+
+        const target = this.lastVisibleVideoId;
+        if (target) {
+            snapshot.targetVideoId = target;
         }
 
         saveSession(snapshot);
@@ -81,19 +141,92 @@ class AppState {
             this.searchState.inputQuery = snapshot.searchQuery;
         }
 
+        const targetId = snapshot.targetVideoId;
+
         if (snapshot.viewMode === 'list') {
             await this.searchState.search(this.searchState.inputQuery);
+
+            if (targetId) {
+                this.restore.start(targetId);
+                this.restore.transition('paginating-to-target');
+                void this.bgPaginateToTarget();
+            }
+
             return true;
         }
 
         if (snapshot.viewMode === 'channel' && snapshot.activeChannel) {
-            // Restore list in background, then open channel
-            this.searchState.search(this.searchState.inputQuery);
+            // Restore list in background (with scroll target), then open channel
+            this.searchState.search(this.searchState.inputQuery).then(() => {
+                if (targetId) {
+                    this.restore.start(targetId);
+                    this.restore.transition('paginating-to-target');
+                    void this.bgPaginateToTarget();
+                }
+            });
             await this.channel.openChannel(snapshot.activeChannel);
             return true;
         }
 
         return false;
+    }
+
+    // --- Scroll restore helpers ---
+
+    private async bgPaginateToTarget() {
+        const targetId = this.restore.targetVideoId;
+        if (!targetId || !this.restore.isActive) {
+            this.restore.done();
+            return;
+        }
+
+        try {
+            if (this.searchState.results.some(v => v.id === targetId)) {
+                this.restore.transition('scrolling');
+                this.onTargetFound(targetId);
+                return;
+            }
+
+            const found = await this.searchState.paginateToTarget(targetId, this.restore.signal!);
+            if (!this.restore.isActive) return;
+
+            if (found) {
+                this.restore.transition('scrolling');
+                this.onTargetFound(targetId);
+            } else {
+                this.restore.done();
+            }
+        } catch {
+            this.restore.done();
+        }
+    }
+
+    private onTargetFound(targetId: string) {
+        const scrolled = this.scrollListToTarget(targetId);
+        if (scrolled) {
+            this.restore.done();
+        } else {
+            this.showScrollToast(targetId);
+            this.restore.done();
+        }
+    }
+
+    private scrollListToTarget(targetId: string): boolean {
+        const card = document.querySelector(`[data-video-id="${CSS.escape(targetId)}"]`);
+        if (card) {
+            card.scrollIntoView({ block: 'center' });
+            return true;
+        }
+        return false;
+    }
+
+    private showScrollToast(targetId: string) {
+        this.toast.show('Tap to scroll to last position', SESSION_TOAST_DURATION, () => {
+            const card = document.querySelector(`[data-video-id="${CSS.escape(targetId)}"]`);
+            if (card) {
+                card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        });
     }
 
     // --- Init ---
