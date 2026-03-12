@@ -1,0 +1,11 @@
+{
+  "name": "km-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/provider-types",
+    "packages/extensions",
+    "packages/server",
+    "packages/app"
+  ]
+}
