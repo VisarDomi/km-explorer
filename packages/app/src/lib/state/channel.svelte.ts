@@ -18,13 +18,13 @@ export class ChannelState {
         this.ui = ui;
     }
 
-    async openChannel(actor: Actor) {
+    async openChannel(actor: Actor, { skipPush = false } = {}) {
         this.activeChannel = actor;
         this.videos = [];
         this.currentPage = 1;
         this.hasMore = false;
         this.isLoading = true;
-        this.ui.pushView('channel');
+        if (!skipPush) this.ui.pushView('channel');
 
         try {
             const data = await api.fetchChannel(actor.url, 1);

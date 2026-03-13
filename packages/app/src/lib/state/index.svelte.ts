@@ -7,6 +7,7 @@ import { VideoDetailState } from './videoDetail.svelte.js';
 import { ToastState } from './toast.svelte.js';
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from './session.js';
 import { RESUME_RECOVERY_MS, DEEP_SLEEP_MS, VISIBLE_VIDEO_DEBOUNCE_MS, SESSION_TOAST_DURATION } from '../constants.js';
+import type { ViewFrame } from '../types.js';
 
 export type AppStatus = 'BOOTING' | 'READY' | 'BACKGROUND' | 'RECONNECTING' | 'OFFLINE';
 
@@ -74,6 +75,23 @@ class AppState {
 
         // Wire up session save on every view transition
         this.ui.onViewChange = () => this.persistSession();
+
+        // Wire up scroll target capture: moves lastVisibleVideoId into the pushed frame
+        this.ui.captureScrollTarget = () => {
+            const target = this.lastVisibleVideoId ?? undefined;
+            this.lastVisibleVideoId = null;
+            return target;
+        };
+
+        // Wire up frame restore: when popping back, restore scroll target from the frame
+        this.ui.onFrameRestored = (frame) => {
+            if (frame.targetVideoId) {
+                this.lastVisibleVideoId = frame.targetVideoId;
+                requestAnimationFrame(() => {
+                    this.scrollListToTarget(frame.targetVideoId!);
+                });
+            }
+        };
     }
 
     private recoverScrollContainers() {
@@ -110,7 +128,7 @@ class AppState {
     private persistSession() {
         const snapshot: SessionSnapshot = {
             viewMode: this.ui.viewMode,
-            viewStack: [...this.ui.viewStack],
+            viewStack: $state.snapshot(this.ui.viewStack),
         };
 
         if (this.channel.activeChannel) {
@@ -144,10 +162,13 @@ class AppState {
         const targetId = snapshot.targetVideoId;
 
         if (snapshot.viewMode === 'list') {
+            // Restore list's own scroll target (could be from stack frame or direct)
+            const listTargetId = targetId ?? this.findListTargetInStack(snapshot.viewStack);
+
             await this.searchState.search(this.searchState.inputQuery);
 
-            if (targetId) {
-                this.restore.start(targetId);
+            if (listTargetId) {
+                this.restore.start(listTargetId);
                 this.restore.transition('paginating-to-target');
                 void this.bgPaginateToTarget();
             }
@@ -156,9 +177,19 @@ class AppState {
         }
 
         if (snapshot.viewMode === 'channel' && snapshot.activeChannel) {
-            // Restore list in background, then open channel
-            void this.searchState.search(this.searchState.inputQuery);
-            await this.channel.openChannel(snapshot.activeChannel);
+            // Find the list's scroll target from the stack frame
+            const listTargetId = this.findListTargetInStack(snapshot.viewStack);
+
+            // Restore list in background with its own target
+            void this.searchState.search(this.searchState.inputQuery).then(() => {
+                if (listTargetId) {
+                    void this.bgPaginateAndPark(listTargetId);
+                }
+            });
+
+            // Restore the view stack (without triggering session save)
+            this.ui.setViewDirect('channel', snapshot.viewStack);
+            await this.channel.openChannel(snapshot.activeChannel, { skipPush: true });
 
             // Scroll to last visible video in channel view
             if (targetId) {
@@ -172,6 +203,31 @@ class AppState {
         }
 
         return false;
+    }
+
+    /**
+     * Find the list view's targetVideoId from the view stack frames.
+     */
+    private findListTargetInStack(stack: ViewFrame[]): string | undefined {
+        for (const frame of stack) {
+            if (frame.mode === 'list' && frame.targetVideoId) {
+                return frame.targetVideoId;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Paginate search results until the list's target video is present in DOM,
+     * but don't scroll — just park the results so they're ready when user pops back.
+     */
+    private async bgPaginateAndPark(targetId: string) {
+        try {
+            if (this.searchState.results.some(v => v.id === targetId)) return;
+            await this.searchState.paginateToTarget(targetId);
+        } catch {
+            // Best-effort: if pagination fails, list will just show page 1
+        }
     }
 
     // --- Scroll restore helpers ---

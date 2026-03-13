@@ -1,11 +1,11 @@
-import type { ViewMode } from '../types.js';
+import type { ViewMode, ViewFrame } from '../types.js';
 import * as storage from '../services/storage.js';
 
 const SESSION_KEY = 'session';
 
 export interface SessionSnapshot {
     viewMode: ViewMode;
-    viewStack: ViewMode[];
+    viewStack: ViewFrame[];
     activeChannel?: { name: string; url: string };
     searchQuery?: string;
     targetVideoId?: string;
