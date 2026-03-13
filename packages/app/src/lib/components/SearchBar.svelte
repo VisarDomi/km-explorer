@@ -3,8 +3,7 @@
 
     function handleSubmit(e: Event) {
         e.preventDefault();
-        appState.ui.resetTo('list');
-        appState.searchState.search(appState.searchState.inputQuery);
+        appState.submitSearch(appState.inputQuery);
     }
 </script>
 
@@ -13,7 +12,7 @@
         <input
             type="text"
             placeholder="Search videos..."
-            bind:value={appState.searchState.inputQuery}
+            bind:value={appState.inputQuery}
             disabled={appState.searchState.isLoading}
         />
         {#if appState.searchState.isLoading}

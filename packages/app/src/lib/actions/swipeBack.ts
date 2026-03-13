@@ -3,7 +3,9 @@ import { SWIPE_THRESHOLD, DEADZONE_RATIO, EDGE_ZONE_RATIO } from '../constants.j
 
 interface SwipeBackOptions {
     onClose: () => void;
-    ui: { swipeProgress: number; isSwiping: boolean; swipeAnimating: boolean };
+    onSwipeStart: () => void;
+    onSwipeUpdate: (progress: number) => void;
+    onSwipeEnd: (committed: boolean) => void;
 }
 
 export function swipeBack(node: HTMLElement, options: SwipeBackOptions) {
@@ -14,6 +16,7 @@ export function swipeBack(node: HTMLElement, options: SwipeBackOptions) {
     let rejected = false;
     let lockDx = 0;
     let opts = options;
+    let lastProgress = 0;
 
     function onStart(e: TouchEvent) {
         const touch = e.touches[0];
@@ -23,6 +26,7 @@ export function swipeBack(node: HTMLElement, options: SwipeBackOptions) {
             locked = false;
             rejected = false;
             lockDx = 0;
+            lastProgress = 0;
             startX = touch.clientX;
             startY = touch.clientY;
         }
@@ -48,14 +52,15 @@ export function swipeBack(node: HTMLElement, options: SwipeBackOptions) {
             }
             locked = true;
             lockDx = dx;
-            opts.ui.isSwiping = true;
+            opts.onSwipeStart();
         }
 
         e.preventDefault();
 
         const travel = dx - lockDx;
         const maxTravel = appWidth - lockDx;
-        opts.ui.swipeProgress = Math.max(0, Math.min(1, travel / maxTravel));
+        lastProgress = Math.max(0, Math.min(1, travel / maxTravel));
+        opts.onSwipeUpdate(lastProgress);
     }
 
     function onEnd() {
@@ -65,23 +70,13 @@ export function swipeBack(node: HTMLElement, options: SwipeBackOptions) {
         }
 
         tracking = false;
-        const progress = opts.ui.swipeProgress;
+        const committed = lastProgress > SWIPE_THRESHOLD;
 
-        opts.ui.swipeAnimating = true;
+        opts.onSwipeEnd(committed);
 
-        if (progress > SWIPE_THRESHOLD) {
-            opts.ui.swipeProgress = 1;
+        if (committed) {
             setTimeout(() => {
-                opts.ui.isSwiping = false;
-                opts.ui.swipeAnimating = false;
-                opts.ui.swipeProgress = 0;
                 opts.onClose();
-            }, 250);
-        } else {
-            opts.ui.swipeProgress = 0;
-            setTimeout(() => {
-                opts.ui.isSwiping = false;
-                opts.ui.swipeAnimating = false;
             }, 250);
         }
     }

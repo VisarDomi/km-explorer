@@ -1,7 +1,6 @@
 import type { VideoStub, Actor } from '../types.js';
 import * as api from '../services/api.js';
 import type { ToastState } from './toast.svelte.js';
-import type { UIState } from './ui.svelte.js';
 
 export class ChannelState {
     activeChannel = $state<Actor | null>(null);
@@ -11,20 +10,17 @@ export class ChannelState {
     isLoading = $state(false);
 
     private toast: ToastState;
-    private ui: UIState;
 
-    constructor(toast: ToastState, ui: UIState) {
+    constructor(toast: ToastState) {
         this.toast = toast;
-        this.ui = ui;
     }
 
-    async openChannel(actor: Actor, { skipPush = false } = {}) {
+    async openChannel(actor: Actor) {
         this.activeChannel = actor;
         this.videos = [];
         this.currentPage = 1;
         this.hasMore = false;
         this.isLoading = true;
-        if (!skipPush) this.ui.pushView('channel');
 
         try {
             const data = await api.fetchChannel(actor.url, 1);
@@ -58,7 +54,6 @@ export class ChannelState {
     }
 
     close() {
-        this.ui.popView();
         this.activeChannel = null;
         this.videos = [];
     }

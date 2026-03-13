@@ -7,7 +7,8 @@ import { VideoDetailState } from './videoDetail.svelte.js';
 import { ToastState } from './toast.svelte.js';
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from './session.js';
 import { RESUME_RECOVERY_MS, DEEP_SLEEP_MS, VISIBLE_VIDEO_DEBOUNCE_MS, SESSION_TOAST_DURATION } from '../constants.js';
-import type { ViewFrame } from '../types.js';
+import * as storage from '../services/storage.js';
+import type { Actor, ViewFrame } from '../types.js';
 
 export type AppStatus = 'BOOTING' | 'READY' | 'BACKGROUND' | 'RECONNECTING' | 'OFFLINE';
 
@@ -53,6 +54,7 @@ class AppState {
     searchState: SearchState;
     channel: ChannelState;
     videoDetails = new VideoDetailState();
+    inputQuery = $state(storage.getString('lastQuery', ''));
 
     // Lifecycle
     status = $state<AppStatus>('BOOTING');
@@ -71,7 +73,7 @@ class AppState {
             this.toast,
             () => this.recoverScrollContainers(),
         );
-        this.channel = new ChannelState(this.toast, this.ui);
+        this.channel = new ChannelState(this.toast);
 
         // Wire up session save on every view transition
         this.ui.onViewChange = () => this.persistSession();
@@ -83,15 +85,41 @@ class AppState {
             return target;
         };
 
-        // Wire up frame restore: when popping back, restore scroll target from the frame
+        // Wire up frame restore: when popping back, scroll to the frame's target
         this.ui.onFrameRestored = (frame) => {
             if (frame.targetVideoId) {
-                this.lastVisibleVideoId = frame.targetVideoId;
                 requestAnimationFrame(() => {
                     this.scrollListToTarget(frame.targetVideoId!);
                 });
             }
         };
+    }
+
+    // --- Navigation ---
+
+    async openChannel(actor: Actor) {
+        this.ui.pushView('channel');
+        await this.channel.openChannel(actor);
+    }
+
+    prepareBackNavigation() {
+        const stack = this.ui.viewStack;
+        if (stack.length === 0) return;
+        const frame = stack[stack.length - 1];
+        if (frame.targetVideoId) {
+            this.scrollListToTarget(frame.targetVideoId);
+        }
+    }
+
+    closeChannel() {
+        this.ui.popView();
+        this.channel.close();
+    }
+
+    submitSearch(query: string) {
+        this.ui.resetTo('list');
+        this.lastVisibleVideoId = null;
+        this.searchState.search(query);
     }
 
     private recoverScrollContainers() {
@@ -156,7 +184,7 @@ class AppState {
         clearSession();
 
         if (snapshot.searchQuery) {
-            this.searchState.inputQuery = snapshot.searchQuery;
+            this.inputQuery = snapshot.searchQuery;
         }
 
         const targetId = snapshot.targetVideoId;
@@ -165,7 +193,7 @@ class AppState {
             // Restore list's own scroll target (could be from stack frame or direct)
             const listTargetId = targetId ?? this.findListTargetInStack(snapshot.viewStack);
 
-            await this.searchState.search(this.searchState.inputQuery);
+            await this.searchState.search(this.inputQuery);
 
             if (listTargetId) {
                 this.restore.start(listTargetId);
@@ -181,7 +209,7 @@ class AppState {
             const listTargetId = this.findListTargetInStack(snapshot.viewStack);
 
             // Restore list in background with its own target
-            void this.searchState.search(this.searchState.inputQuery).then(() => {
+            void this.searchState.search(this.inputQuery).then(() => {
                 if (listTargetId) {
                     void this.bgPaginateAndPark(listTargetId);
                 }
@@ -189,7 +217,7 @@ class AppState {
 
             // Restore the view stack (without triggering session save)
             this.ui.setViewDirect('channel', snapshot.viewStack);
-            await this.channel.openChannel(snapshot.activeChannel, { skipPush: true });
+            await this.channel.openChannel(snapshot.activeChannel);
 
             // Scroll to last visible video in channel view
             if (targetId) {
@@ -300,7 +328,7 @@ class AppState {
     async init() {
         const restored = await this.restoreSession();
         if (!restored) {
-            await this.searchState.search(this.searchState.inputQuery);
+            await this.searchState.search(this.inputQuery);
         }
 
         // Start lifecycle monitoring

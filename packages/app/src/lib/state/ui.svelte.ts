@@ -68,4 +68,28 @@ export class UIState {
     get previousViewMode(): ViewMode {
         return this.peekBack();
     }
+
+    startSwipe() {
+        this.isSwiping = true;
+    }
+
+    updateSwipe(progress: number) {
+        this.swipeProgress = progress;
+    }
+
+    endSwipe(committed: boolean) {
+        this.swipeAnimating = true;
+
+        if (committed) {
+            this.swipeProgress = 1;
+        } else {
+            this.swipeProgress = 0;
+        }
+
+        setTimeout(() => {
+            this.isSwiping = false;
+            this.swipeAnimating = false;
+            this.swipeProgress = 0;
+        }, 250);
+    }
 }

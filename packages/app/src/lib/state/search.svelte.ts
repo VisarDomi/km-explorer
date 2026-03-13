@@ -34,7 +34,6 @@ class SearchMachine {
 export class SearchState {
     results = $state<VideoStub[]>([]);
     currentQuery = $state('');
-    inputQuery = $state('');
     currentPage = $state(1);
     hasMore = $state(false);
 
@@ -49,7 +48,6 @@ export class SearchState {
     constructor(toast: ToastState, onStuck?: () => void) {
         this.toast = toast;
         this.onStuck = onStuck ?? null;
-        this.inputQuery = storage.getString('lastQuery', '');
     }
 
     private startWatchdog() {

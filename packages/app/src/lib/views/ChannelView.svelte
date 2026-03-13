@@ -50,10 +50,15 @@
 
 <div
     class="channel-view"
-    use:swipeBack={{ onClose: () => channel.close(), ui: appState.ui }}
+    use:swipeBack={{
+        onClose: () => appState.closeChannel(),
+        onSwipeStart: () => { appState.ui.startSwipe(); appState.prepareBackNavigation(); },
+        onSwipeUpdate: (p: number) => appState.ui.updateSwipe(p),
+        onSwipeEnd: (c: boolean) => appState.ui.endSwipe(c),
+    }}
 >
     <div class="channel-header">
-        <button class="back-btn" onclick={() => channel.close()}>&larr;</button>
+        <button class="back-btn" onclick={() => appState.closeChannel()}>&larr;</button>
         <h2 class="channel-name">{name}</h2>
     </div>
 

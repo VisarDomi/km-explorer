@@ -44,7 +44,7 @@
     }
 
     function handleChannel(actor: Actor) {
-        appState.channel.openChannel(actor);
+        appState.openChannel(actor);
     }
 
     let showActorDropdown = $state(false);
