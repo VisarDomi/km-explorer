@@ -1,6 +1,6 @@
 import { getCachedActor, setCachedActor } from './database.js';
 import { getProvider } from './providerLoader.js';
-import { proxyFetch } from '../utils/proxyFetch.js';
+import { proxyFetch, UpstreamError } from '../utils/proxyFetch.js';
 import { USER_AGENT } from '../config.js';
 import type { VideoStub, PagedResult } from '@km-explorer/provider-types';
 
@@ -39,12 +39,19 @@ export async function fetchAllActorVideos(termId: number): Promise<VideoStub[]> 
   let page = 1;
 
   while (true) {
-    const req = provider.channelRequest(String(termId), page);
-    const res = await proxyFetch(req.url, {
-      headers: { 'User-Agent': USER_AGENT, ...req.headers },
-    });
-    const data = await res.json();
-    const result: PagedResult<VideoStub> = provider.parseChannelResponse(data);
+    let result: PagedResult<VideoStub>;
+    try {
+      const req = provider.channelRequest(String(termId), page);
+      const res = await proxyFetch(req.url, {
+        headers: { 'User-Agent': USER_AGENT, ...req.headers },
+      });
+      const data = await res.json();
+      result = provider.parseChannelResponse(data);
+    } catch (e) {
+      // WP REST API returns 400 for pages beyond the last — treat as end
+      if (e instanceof UpstreamError && e.status === 400) break;
+      throw e;
+    }
 
     for (const item of result.items) {
       if (!seen.has(item.id)) {
@@ -80,13 +87,18 @@ export async function getActorVideos(actorUrl: string, page = 1): Promise<{ item
     void backgroundFetchAndCache(actorUrl, termId);
   }
 
-  const provider = getProvider();
-  const req = provider.channelRequest(String(termId), page);
-  const res = await proxyFetch(req.url, {
-    headers: { 'User-Agent': USER_AGENT, ...req.headers },
-  });
-  const data = await res.json();
-  return provider.parseChannelResponse(data);
+  try {
+    const provider = getProvider();
+    const req = provider.channelRequest(String(termId), page);
+    const res = await proxyFetch(req.url, {
+      headers: { 'User-Agent': USER_AGENT, ...req.headers },
+    });
+    const data = await res.json();
+    return provider.parseChannelResponse(data);
+  } catch {
+    // WP REST API returns 400 for pages beyond the last — stop pagination gracefully
+    return { items: [], hasMore: false };
+  }
 }
 
 async function refreshActor(actorUrl: string, termId: number): Promise<void> {

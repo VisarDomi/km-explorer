@@ -6,13 +6,13 @@ import { USER_AGENT } from '../config.js';
 import type { VideoStub } from '@km-explorer/provider-types';
 
 const DETAIL_DELAY_MS = 500;
+const ACTOR_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-async function main() {
-  await loadProvider();
+async function backfillVideoDetails() {
   const provider = getProvider();
 
-  // Phase 1: Collect all video URLs from Typesense via provider pagination
-  console.log('[backfill] Phase 1: Fetching all video stubs...');
+  // Phase 1: Collect all video URLs from Typesense
+  console.log('[backfill] Phase 1: Fetching all video stubs from Typesense...');
   const allStubs: VideoStub[] = [];
   const seen = new Set<string>();
   let page = 1;
@@ -44,15 +44,15 @@ async function main() {
   const allUrls = allStubs.map(s => s.pageUrl);
   const cached = getCachedDetails(allUrls);
   const uncached = allStubs.filter(s => !cached.has(s.pageUrl));
-  console.log(`[backfill] Phase 2: ${cached.size} cached, ${uncached.length} uncached`);
+  console.log(`[backfill] ${cached.size} cached, ${uncached.length} uncached`);
 
   if (uncached.length === 0) {
-    console.log('[backfill] Nothing to backfill, exiting.');
+    console.log('[backfill] All video details cached.');
     return;
   }
 
-  // Phase 3: Scrape details for uncached URLs sequentially
-  console.log('[backfill] Phase 3: Scraping details...');
+  // Phase 3: Scrape details for uncached URLs
+  console.log('[backfill] Scraping uncached video details...');
   let done = 0;
   let errors = 0;
 
@@ -72,7 +72,7 @@ async function main() {
 
     done++;
     if (done % 10 === 0) {
-      console.log(`[backfill] Progress: ${done}/${uncached.length} (${errors} errors)`);
+      console.log(`[backfill] Video progress: ${done}/${uncached.length} (${errors} errors)`);
     }
 
     if (done < uncached.length) {
@@ -80,50 +80,56 @@ async function main() {
     }
   }
 
-  console.log(`[backfill] Phase 3 done: ${done} processed, ${errors} errors`);
+  console.log(`[backfill] Video details done: ${done} processed, ${errors} errors`);
+}
 
-  // Phase 4: Backfill actor cache
-  console.log('[backfill] Phase 4: Backfilling actor cache...');
+async function backfillActorCache() {
   const actorUrls = getUniqueActorUrls();
-  console.log(`[backfill] Found ${actorUrls.length} unique actors`);
+  const uncached = actorUrls.filter(url => {
+    const existing = getCachedActor(url);
+    return !existing || (Date.now() - existing.cachedAt) >= ACTOR_CACHE_MAX_AGE_MS;
+  });
+  console.log(`[backfill] Actor cache: ${uncached.length} to fetch, ${actorUrls.length - uncached.length} fresh`);
 
-  const ACTOR_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-  let actorDone = 0;
-  let actorErrors = 0;
-  let actorSkipped = 0;
+  if (uncached.length === 0) {
+    console.log('[backfill] All actors cached.');
+    return;
+  }
 
-  for (const actorUrl of actorUrls) {
-    const existing = getCachedActor(actorUrl);
-    if (existing && (Date.now() - existing.cachedAt) < ACTOR_CACHE_MAX_AGE_MS) {
-      actorSkipped++;
-      actorDone++;
-      if (actorDone % 10 === 0) {
-        console.log(`[backfill] Actor progress: ${actorDone}/${actorUrls.length} (${actorSkipped} skipped, ${actorErrors} errors)`);
-      }
-      continue;
-    }
+  let done = 0;
+  let errors = 0;
 
+  for (const actorUrl of uncached) {
     try {
       const termId = await resolveTermId(actorUrl);
       if (termId === null) {
-        actorErrors++;
+        errors++;
         console.error(`[backfill] Could not resolve term ID for ${actorUrl}`);
       } else {
         const videos = await fetchAllActorVideos(termId);
         setCachedActor(actorUrl, termId, videos);
       }
     } catch (e) {
-      actorErrors++;
-      console.error(`[backfill] Error caching actor ${actorUrl}:`, (e as Error).message);
+      errors++;
+      console.error(`[backfill] Error caching actor ${actorUrl}: ${(e as Error).message}`);
     }
 
-    actorDone++;
-    if (actorDone % 10 === 0) {
-      console.log(`[backfill] Actor progress: ${actorDone}/${actorUrls.length} (${actorSkipped} skipped, ${actorErrors} errors)`);
+    done++;
+    if (done % 10 === 0) {
+      console.log(`[backfill] Actor progress: ${done}/${uncached.length} (${errors} errors)`);
     }
   }
 
-  console.log(`[backfill] Phase 4 done: ${actorDone} actors, ${actorSkipped} skipped, ${actorErrors} errors`);
+  console.log(`[backfill] Actor cache done: ${done} processed, ${errors} errors`);
+}
+
+async function main() {
+  await loadProvider();
+
+  await backfillVideoDetails();
+  await backfillActorCache();
+
+  console.log('[backfill] All done.');
 }
 
 main().catch(err => {

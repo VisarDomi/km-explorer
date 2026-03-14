@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "restart": "systemctl --user restart km-explorer-backend",
     "stop": "systemctl --user stop km-explorer-backend",
