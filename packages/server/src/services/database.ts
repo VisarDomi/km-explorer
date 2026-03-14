@@ -24,6 +24,16 @@ db.exec(`
   )
 `);
 
+// Migration: rewrite cached thumbnails to canonical 320x180 size
+db.exec(`
+  UPDATE actor_cache
+  SET videos = replace(
+    replace(videos, '-300x169.', '-320x180.'),
+    '-300x225.', '-320x180.'
+  )
+  WHERE videos LIKE '%-300x169.%' OR videos LIKE '%-300x225.%'
+`);
+
 const getOne = db.prepare('SELECT video_src, actors, scraped_at FROM video_details WHERE video_url = ?');
 const getMany = db.prepare('SELECT video_url, video_src, actors FROM video_details WHERE video_url IN (SELECT value FROM json_each(?))');
 const upsert = db.prepare('INSERT OR REPLACE INTO video_details (video_url, video_src, actors, scraped_at) VALUES (?, ?, ?, ?)');
