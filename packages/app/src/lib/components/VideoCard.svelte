@@ -60,11 +60,22 @@
     }
 
     const thumbnailUrl = $derived(api.imageProxyUrl(video.thumbnail));
+
+    function handleImgError(e: Event) {
+        const img = e.currentTarget as HTMLImageElement;
+        if (img.dataset.fallback) return;
+        // Original failed — try 320x180 sized variant
+        const fallback = video.thumbnail.replace(/(\.\w+)$/, '-320x180$1');
+        if (fallback !== video.thumbnail) {
+            img.dataset.fallback = '1';
+            img.src = api.imageProxyUrl(fallback);
+        }
+    }
 </script>
 
 <div class="video-card" data-video-id={video.id}>
     <div class="thumb-wrapper">
-        <img src={thumbnailUrl} alt="" loading="eager" />
+        <img src={thumbnailUrl} alt="" loading="eager" onerror={handleImgError} />
         <div class="actions">
             <button
                 class="action-btn copy-btn"

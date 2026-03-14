@@ -2,16 +2,13 @@ import type { VideoStub, VideoDetail, Actor, PagedResult } from '@km-explorer/pr
 
 const PER_PAGE = 12;
 
-/** Canonical thumbnail size — the only WP image size allowed through Cloudflare. */
-const THUMB_SIZE = '320x180';
-
 /**
- * Normalize a WP thumbnail URL to the only CDN-allowed size.
- * Rewrites `-{W}x{H}.ext` → `-320x180.ext`. Passes through non-WP URLs unchanged.
+ * Strip the WP size suffix to get the original upload URL.
+ * `-{W}x{H}.ext` → `.ext`. Passes through non-WP URLs unchanged.
  */
-function normalizeThumbnailUrl(url: string): string {
+function originalThumbnailUrl(url: string): string {
   if (!url) return url;
-  return url.replace(/-\d+x\d+(\.\w+)$/, `-${THUMB_SIZE}$1`);
+  return url.replace(/-\d+x\d+(\.\w+)$/, '$1');
 }
 
 // --- Typesense JSON response parsing ---
@@ -41,7 +38,7 @@ export function parseTypesenseResponse(data: unknown): PagedResult<VideoStub> {
     return {
       id: doc.post_id ?? '',
       title: doc.post_title ?? '',
-      thumbnail: normalizeThumbnailUrl(doc.post_thumbnail ?? ''),
+      thumbnail: originalThumbnailUrl(doc.post_thumbnail ?? ''),
       pageUrl: doc.permalink ?? '',
     };
   });
@@ -105,7 +102,7 @@ export function parseWpPostsResponse(data: unknown, perPage: number): PagedResul
   const items: VideoStub[] = posts.map(post => {
     const media = post._embedded?.['wp:featuredmedia']?.[0];
     const sizes = media?.media_details?.sizes;
-    const thumbnail = normalizeThumbnailUrl(sizes?.medium?.source_url ?? sizes?.thumbnail?.source_url ?? media?.source_url ?? '');
+    const thumbnail = originalThumbnailUrl(sizes?.medium?.source_url ?? sizes?.thumbnail?.source_url ?? media?.source_url ?? '');
 
     return {
       id: String(post.id),

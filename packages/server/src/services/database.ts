@@ -24,15 +24,21 @@ db.exec(`
   )
 `);
 
-// Migration: rewrite cached thumbnails to canonical 320x180 size
-db.exec(`
-  UPDATE actor_cache
-  SET videos = replace(
-    replace(videos, '-300x169.', '-320x180.'),
-    '-300x225.', '-320x180.'
-  )
-  WHERE videos LIKE '%-300x169.%' OR videos LIKE '%-300x225.%'
-`);
+// Migration: strip WP size suffixes from cached thumbnail URLs → use originals
+{
+  const rows = db.prepare("SELECT actor_url, videos FROM actor_cache").all() as { actor_url: string; videos: string }[];
+  const update = db.prepare("UPDATE actor_cache SET videos = ? WHERE actor_url = ?");
+  const batch = db.transaction(() => {
+    for (const row of rows) {
+      const fixed = row.videos.replace(
+        /"thumbnail":"(https?:\/\/[^"]+)-\d+x\d+(\.\w+)"/g,
+        '"thumbnail":"$1$2"'
+      );
+      if (fixed !== row.videos) update.run(fixed, row.actor_url);
+    }
+  });
+  batch();
+}
 
 const getOne = db.prepare('SELECT video_src, actors, scraped_at FROM video_details WHERE video_url = ?');
 const getMany = db.prepare('SELECT video_url, video_src, actors FROM video_details WHERE video_url IN (SELECT value FROM json_each(?))');

@@ -8,11 +8,29 @@ export function isAllowedImageDomain(_hostname: string): boolean {
   return true;
 }
 
+/**
+ * Insert `-320x180` before the extension to get the WP thumbnail variant.
+ * Returns null if the URL already has a size suffix.
+ */
+function sizedUrl(url: string): string | null {
+  // Don't double-size a URL that already has -WxH
+  if (/-\d+x\d+\.\w+$/.test(url)) return null;
+  return url.replace(/(\.\w+)$/, '-320x180$1');
+}
+
 export async function streamImage(imageUrl: string, res: Response, referer?: string): Promise<void> {
   const headers: Record<string, string> = { 'User-Agent': USER_AGENT };
   if (referer) headers['Referer'] = referer;
 
-  const r = await proxyFetch(imageUrl, { headers });
+  let r = await proxyFetch(imageUrl, { headers });
+
+  // Fallback: if the original is blocked, try the 320x180 sized variant
+  if (!r.ok) {
+    const fallback = sizedUrl(imageUrl);
+    if (fallback) {
+      r = await proxyFetch(fallback, { headers });
+    }
+  }
 
   const contentType = r.headers.get('content-type') || 'image/jpeg';
   res.set('Content-Type', contentType);
