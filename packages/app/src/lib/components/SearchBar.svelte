@@ -8,17 +8,22 @@
 </script>
 
 <div class="search-bar-wrapper">
-    <form class="input-container" onsubmit={handleSubmit}>
-        <input
-            type="text"
-            placeholder="Search videos..."
-            bind:value={appState.inputQuery}
-            disabled={appState.searchState.isLoading}
-        />
-        {#if appState.searchState.isLoading}
-            <div class="search-spinner"></div>
-        {/if}
-    </form>
+    <div class="search-row">
+        <form class="input-container" onsubmit={handleSubmit}>
+            <input
+                type="text"
+                placeholder="Search videos..."
+                bind:value={appState.inputQuery}
+                disabled={appState.searchState.isLoading}
+            />
+            {#if appState.searchState.isLoading}
+                <div class="search-spinner"></div>
+            {/if}
+        </form>
+        <button class="favs-btn" onclick={() => appState.openFavorites()}>
+            Favs
+        </button>
+    </div>
 </div>
 
 <style>
@@ -35,9 +40,31 @@
     padding: 12px;
 }
 
+.search-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
 .input-container {
     position: relative;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+}
+
+.favs-btn {
+    padding: 0 14px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: rgba(0, 0, 0, 0.3);
+    color: #f87171;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.favs-btn:active {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .input-container input {

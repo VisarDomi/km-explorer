@@ -4,6 +4,7 @@
     import { initAppDimensions } from '$lib/state/appDimensions.js';
     import ListView from '$lib/views/ListView.svelte';
     import ChannelView from '$lib/views/ChannelView.svelte';
+    import FavoritesView from '$lib/views/FavoritesView.svelte';
     import Toast from '$lib/components/Toast.svelte';
 
     onMount(() => {
@@ -18,6 +19,7 @@
 
     const backView = $derived(isSwiping ? appState.ui.peekBack() : null);
     const inChannel = $derived(viewMode === 'channel');
+    const inFavorites = $derived(viewMode === 'favorites');
 </script>
 
 <div
@@ -40,6 +42,18 @@
     style="{inChannel && isSwiping ? `transform:translateX(${swipeProgress * 100}%)` : ''}"
 >
     <ChannelView />
+</div>
+
+<div
+    id="view-favorites"
+    class="view-layer"
+    class:view-hidden={viewMode !== 'favorites' && backView !== 'favorites'}
+    class:swipe-back={backView === 'favorites'}
+    class:swipe-animating={backView === 'favorites' && swipeAnimating}
+    class:swipe-active={inFavorites && isSwiping}
+    style="{inFavorites && isSwiping ? `transform:translateX(${swipeProgress * 100}%)` : ''}"
+>
+    <FavoritesView />
 </div>
 
 <Toast />

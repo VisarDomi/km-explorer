@@ -60,6 +60,12 @@
     }
 
     const thumbnailUrl = $derived(api.imageProxyUrl(video.thumbnail));
+    const isFav = $derived(appState.favorites.isFavorited(video.id));
+
+    function handleFav(e: MouseEvent) {
+        e.stopPropagation();
+        appState.toggleFavorite(video);
+    }
 
     function handleImgError(e: Event) {
         const img = e.currentTarget as HTMLImageElement;
@@ -76,6 +82,9 @@
 <div class="video-card" data-video-id={video.id}>
     <div class="thumb-wrapper">
         <img src={thumbnailUrl} alt="" loading="eager" onerror={handleImgError} />
+        <button class="fav-btn" class:fav-active={isFav} onclick={handleFav}>
+            {isFav ? '\u2764' : '\u2661'}
+        </button>
         <div class="actions">
             <button
                 class="action-btn copy-btn"
@@ -129,6 +138,31 @@
     height: 100%;
     object-fit: cover;
     display: block;
+}
+
+.fav-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 18px;
+    color: #666;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.fav-btn.fav-active {
+    color: #f87171;
+}
+
+.fav-btn:active {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .actions {

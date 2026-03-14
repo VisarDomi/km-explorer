@@ -3,12 +3,13 @@ import { watchdog } from '../services/WatchdogService.js';
 import { UIState } from './ui.svelte.js';
 import { SearchState } from './search.svelte.js';
 import { ChannelState } from './channel.svelte.js';
+import { FavoritesState } from './favorites.svelte.js';
 import { VideoDetailState } from './videoDetail.svelte.js';
 import { ToastState } from './toast.svelte.js';
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from './session.js';
 import { RESUME_RECOVERY_MS, DEEP_SLEEP_MS, VISIBLE_VIDEO_DEBOUNCE_MS, SESSION_TOAST_DURATION } from '../constants.js';
 import * as storage from '../services/storage.js';
-import type { Actor, ViewFrame } from '../types.js';
+import type { Actor, VideoStub, ViewFrame } from '../types.js';
 
 export type AppStatus = 'BOOTING' | 'READY' | 'BACKGROUND' | 'RECONNECTING' | 'OFFLINE';
 
@@ -53,6 +54,7 @@ class AppState {
     toast = new ToastState();
     searchState: SearchState;
     channel: ChannelState;
+    favorites: FavoritesState;
     videoDetails = new VideoDetailState();
     inputQuery = $state(storage.getString('lastQuery', ''));
 
@@ -74,6 +76,7 @@ class AppState {
             () => this.recoverScrollContainers(),
         );
         this.channel = new ChannelState(this.toast);
+        this.favorites = new FavoritesState(this.toast);
 
         // Wire up session save on every view transition
         this.ui.onViewChange = () => this.persistSession();
@@ -89,7 +92,11 @@ class AppState {
         this.ui.onFrameRestored = (frame) => {
             if (frame.targetVideoId) {
                 requestAnimationFrame(() => {
-                    this.scrollListToTarget(frame.targetVideoId!);
+                    if (frame.mode === 'favorites') {
+                        this.scrollFavoritesToTarget(frame.targetVideoId!);
+                    } else {
+                        this.scrollListToTarget(frame.targetVideoId!);
+                    }
                 });
             }
         };
@@ -116,6 +123,18 @@ class AppState {
         this.channel.close();
     }
 
+    openFavorites() {
+        this.ui.pushView('favorites');
+    }
+
+    closeFavorites() {
+        this.ui.popView();
+    }
+
+    toggleFavorite(video: VideoStub) {
+        this.favorites.toggle(video);
+    }
+
     submitSearch(query: string) {
         this.ui.resetTo('list');
         this.lastVisibleVideoId = null;
@@ -123,7 +142,7 @@ class AppState {
     }
 
     private recoverScrollContainers() {
-        const ids = ['view-list', 'view-channel'];
+        const ids = ['view-list', 'view-channel', 'view-favorites'];
         for (const id of ids) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -145,7 +164,7 @@ class AppState {
         if (this.visibleVideoDebounce) clearTimeout(this.visibleVideoDebounce);
         this.visibleVideoDebounce = setTimeout(() => {
             this.visibleVideoDebounce = null;
-            if (this.ui.viewMode === 'list' || this.ui.viewMode === 'channel') {
+            if (this.ui.viewMode === 'list' || this.ui.viewMode === 'channel' || this.ui.viewMode === 'favorites') {
                 this.persistSession();
             }
         }, VISIBLE_VIDEO_DEBOUNCE_MS);
@@ -201,6 +220,27 @@ class AppState {
                 void this.bgPaginateToTarget();
             }
 
+            return true;
+        }
+
+        if (snapshot.viewMode === 'favorites') {
+            // Restore list in background
+            const listTargetId = this.findListTargetInStack(snapshot.viewStack);
+            void this.searchState.search(this.inputQuery).then(() => {
+                if (listTargetId) {
+                    void this.bgPaginateAndPark(listTargetId);
+                }
+            });
+
+            this.ui.setViewDirect('favorites', snapshot.viewStack);
+
+            if (targetId) {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        this.scrollFavoritesToTarget(targetId);
+                    });
+                });
+            }
             return true;
         }
 
@@ -314,6 +354,13 @@ class AppState {
         }
     }
 
+    private scrollFavoritesToTarget(targetId: string) {
+        const card = document.querySelector(`#view-favorites [data-video-id="${CSS.escape(targetId)}"]`);
+        if (card) {
+            card.scrollIntoView({ block: 'center' });
+        }
+    }
+
     private showScrollToast(targetId: string) {
         this.toast.show('Tap to scroll to last position', SESSION_TOAST_DURATION, () => {
             const card = document.querySelector(`[data-video-id="${CSS.escape(targetId)}"]`);
@@ -326,6 +373,8 @@ class AppState {
     // --- Init ---
 
     async init() {
+        await this.favorites.init();
+
         const restored = await this.restoreSession();
         if (!restored) {
             await this.searchState.search(this.inputQuery);
