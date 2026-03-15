@@ -8,7 +8,9 @@ export interface SessionSnapshot {
     viewStack: ViewFrame[];
     activeChannel?: { name: string; url: string };
     searchQuery?: string;
-    targetVideoId?: string;
+    listTargetVideoId?: string;
+    channelTargetVideoId?: string;
+    favoritesTargetVideoId?: string;
 }
 
 export function saveSession(snapshot: SessionSnapshot): void {
