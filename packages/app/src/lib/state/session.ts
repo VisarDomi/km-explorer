@@ -9,7 +9,9 @@ export interface SessionSnapshot {
     activeChannel?: { name: string; url: string };
     searchQuery?: string;
     listTargetVideoId?: string;
+    listCurrentPage?: number;
     channelTargetVideoId?: string;
+    channelCurrentPage?: number;
     favoritesTargetVideoId?: string;
 }
 

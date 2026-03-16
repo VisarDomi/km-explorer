@@ -41,9 +41,14 @@ export class SearchState {
     private machine = new SearchMachine();
     private loadingWatchdog: ReturnType<typeof setTimeout> | null = null;
     private onStuck: (() => void) | null = null;
+    private videoPageMap = new Map<string, number>();
     onNewSearch: (() => void) | null = null;
 
     get isLoading() { return this.machine.isActive; }
+
+    pageOf(videoId: string): number | undefined {
+        return this.videoPageMap.get(videoId);
+    }
 
     constructor(toast: ToastState, onStuck?: () => void) {
         this.toast = toast;
@@ -85,10 +90,13 @@ export class SearchState {
             if (signal.aborted) return;
             this.results = data.items;
             this.hasMore = data.hasMore;
+            this.videoPageMap.clear();
+            for (const v of data.items) this.videoPageMap.set(v.id, 1);
         } catch (e) {
             if (signal.aborted) return;
             this.results = [];
             this.hasMore = false;
+            this.videoPageMap.clear();
             this.toast.show('Search failed');
         } finally {
             this.clearWatchdog();
@@ -107,6 +115,7 @@ export class SearchState {
         const deduped = data.items.filter(v => !seen.has(v.id));
         this.results = [...this.results, ...deduped];
         this.hasMore = data.hasMore;
+        for (const v of deduped) this.videoPageMap.set(v.id, page);
         return deduped;
     }
 
@@ -127,6 +136,24 @@ export class SearchState {
             }
         }
         return false;
+    }
+
+    async restoreToPage(page: number, signal?: AbortSignal) {
+        this.currentPage = page;
+        this.videoPageMap.clear();
+        try {
+            const data = this.currentQuery
+                ? await api.searchVideos(this.currentQuery, page, signal)
+                : await api.fetchLatest(page, signal);
+            if (signal?.aborted) return;
+            this.results = data.items;
+            this.hasMore = data.hasMore;
+            for (const v of data.items) this.videoPageMap.set(v.id, page);
+        } catch {
+            if (signal?.aborted) return;
+            this.results = [];
+            this.hasMore = false;
+        }
     }
 
     async loadNextPage() {

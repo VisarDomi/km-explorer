@@ -10,9 +10,24 @@ export class ChannelState {
     isLoading = $state(false);
 
     private toast: ToastState;
+    private videoPageMap = new Map<string, number>();
 
     constructor(toast: ToastState) {
         this.toast = toast;
+    }
+
+    pageOf(videoId: string): number | undefined {
+        return this.videoPageMap.get(videoId);
+    }
+
+    /** Set active channel without fetching — used during restore before restoreToPage. */
+    setChannel(actor: Actor) {
+        this.activeChannel = actor;
+        this.videos = [];
+        this.currentPage = 0;
+        this.hasMore = false;
+        this.isLoading = false;
+        this.videoPageMap.clear();
     }
 
     async openChannel(actor: Actor, signal?: AbortSignal) {
@@ -21,17 +36,36 @@ export class ChannelState {
         this.currentPage = 1;
         this.hasMore = false;
         this.isLoading = true;
+        this.videoPageMap.clear();
 
         try {
             const data = await api.fetchChannel(actor.url, 1, signal);
             if (signal?.aborted) return;
             this.videos = data.items;
             this.hasMore = data.hasMore;
+            for (const v of data.items) this.videoPageMap.set(v.id, 1);
         } catch {
             if (signal?.aborted) return;
             this.toast.show('Failed to load channel');
         } finally {
             if (!signal?.aborted) this.isLoading = false;
+        }
+    }
+
+    async restoreToPage(page: number, signal?: AbortSignal) {
+        if (!this.activeChannel) return;
+        this.currentPage = page;
+        this.videoPageMap.clear();
+        try {
+            const data = await api.fetchChannel(this.activeChannel.url, page, signal);
+            if (signal?.aborted) return;
+            this.videos = data.items;
+            this.hasMore = data.hasMore;
+            for (const v of data.items) this.videoPageMap.set(v.id, page);
+        } catch {
+            if (signal?.aborted) return;
+            this.videos = [];
+            this.hasMore = false;
         }
     }
 
@@ -47,6 +81,7 @@ export class ChannelState {
             const deduped = data.items.filter(v => !seen.has(v.id));
             this.videos = [...this.videos, ...deduped];
             this.hasMore = data.hasMore;
+            for (const v of deduped) this.videoPageMap.set(v.id, this.currentPage);
         } catch {
             this.currentPage--;
             this.toast.show('Failed to load more');
@@ -68,6 +103,7 @@ export class ChannelState {
                 const deduped = data.items.filter(v => !seen.has(v.id));
                 this.videos = [...this.videos, ...deduped];
                 this.hasMore = data.hasMore;
+                for (const v of deduped) this.videoPageMap.set(v.id, this.currentPage);
                 if (deduped.some(v => v.id === targetId)) return true;
             } catch {
                 if (signal?.aborted) return false;
@@ -81,5 +117,6 @@ export class ChannelState {
     close() {
         this.activeChannel = null;
         this.videos = [];
+        this.videoPageMap.clear();
     }
 }

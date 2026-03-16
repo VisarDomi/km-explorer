@@ -39,8 +39,10 @@
     async function handleCardClick() {
         if (cardState !== 'idle') return;
 
-        // On detail view: no navigation, just copy video source
+        // On detail view: no navigation, just copy video source.
+        // Track this video so session persists the channel scroll position.
         if (isDetailView) {
+            appState.trackVisibleVideo(video.id, true);
             cardState = 'activating';
             const ok = await copyOrWait();
             if (ok) {

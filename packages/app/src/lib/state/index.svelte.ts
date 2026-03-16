@@ -80,12 +80,16 @@ class AppState {
         // Wire up session save on every view transition
         this.ui.onViewChange = () => this.persistSession();
 
-        // Wire up scroll target capture: moves lastVisibleVideoId into the pushed frame
+        // Wire up scroll target capture: moves lastVisibleVideoId + page into the pushed frame
         this.ui.captureScrollTarget = () => {
             const viewMode = this.ui.viewMode;
-            const target = this.lastVisibleVideoIds[viewMode] ?? undefined;
+            const videoId = this.lastVisibleVideoIds[viewMode] ?? undefined;
             this.lastVisibleVideoIds[viewMode] = null;
-            return target;
+            if (!videoId) return {};
+            const page = viewMode === 'channel'
+                ? this.channel.pageOf(videoId)
+                : this.searchState.pageOf(videoId);
+            return { videoId, page };
         };
 
         // Wire up frame restore: when popping back, scroll to the frame's target
@@ -162,11 +166,18 @@ class AppState {
 
     // --- Visible video tracking ---
 
-    trackVisibleVideo(videoId: string) {
+    trackVisibleVideo(videoId: string, immediate = false) {
         const viewMode = this.ui.viewMode;
         this.lastVisibleVideoIds[viewMode] = videoId;
 
         if (this.visibleVideoDebounce) clearTimeout(this.visibleVideoDebounce);
+
+        if (immediate) {
+            this.visibleVideoDebounce = null;
+            this.persistSession();
+            return;
+        }
+
         this.visibleVideoDebounce = setTimeout(() => {
             this.visibleVideoDebounce = null;
             if (viewMode === 'list' || viewMode === 'channel' || viewMode === 'favorites') {
@@ -192,10 +203,16 @@ class AppState {
         }
 
         const listTarget = this.lastVisibleVideoIds.list;
-        if (listTarget) snapshot.listTargetVideoId = listTarget;
+        if (listTarget) {
+            snapshot.listTargetVideoId = listTarget;
+            snapshot.listCurrentPage = this.searchState.pageOf(listTarget);
+        }
 
         const channelTarget = this.lastVisibleVideoIds.channel;
-        if (channelTarget) snapshot.channelTargetVideoId = channelTarget;
+        if (channelTarget) {
+            snapshot.channelTargetVideoId = channelTarget;
+            snapshot.channelCurrentPage = this.channel.pageOf(channelTarget);
+        }
 
         const favTarget = this.lastVisibleVideoIds.favorites;
         if (favTarget) snapshot.favoritesTargetVideoId = favTarget;

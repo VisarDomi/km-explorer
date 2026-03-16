@@ -14,9 +14,9 @@ export class UIState {
 
     /**
      * Callback to capture the current view's scroll target before pushing.
-     * AppState sets this to move lastVisibleVideoId into the frame.
+     * AppState sets this to move lastVisibleVideoId + page into the frame.
      */
-    captureScrollTarget: (() => string | undefined) | null = null;
+    captureScrollTarget: (() => { videoId?: string; page?: number }) | null = null;
 
     /**
      * Callback invoked when a frame is popped, so AppState can restore
@@ -25,8 +25,8 @@ export class UIState {
     onFrameRestored: ((frame: ViewFrame) => void) | null = null;
 
     pushView(mode: ViewMode) {
-        const targetVideoId = this.captureScrollTarget?.();
-        this.viewStack = [...this.viewStack, { mode: this.viewMode, targetVideoId }];
+        const captured = this.captureScrollTarget?.() ?? {};
+        this.viewStack = [...this.viewStack, { mode: this.viewMode, targetVideoId: captured.videoId, targetVideoPage: captured.page }];
         this.viewMode = mode;
         if (mode === 'list') this.listViewGeneration++;
         this.onViewChange?.();
