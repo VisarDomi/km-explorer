@@ -65,7 +65,7 @@
     <div class="channel-content">
         <VideoList {videos} />
 
-        {#if hasMore}
+        {#if hasMore && !appState.isRestoring}
             <div class="sentinel" use:sentinel={{
                 getRoot: () => document.getElementById('view-channel'),
                 rootMargin: SENTINEL_ROOT_MARGIN,

@@ -55,6 +55,7 @@ class AppState {
     favorites: FavoritesState;
     videoDetails = new VideoDetailState();
     inputQuery = $state(storage.getString('lastQuery', ''));
+    get isRestoring() { return this.restore.isActive; }
 
     // Lifecycle
     status = $state<AppStatus>('BOOTING');
@@ -247,10 +248,21 @@ class AppState {
     }
 
     private async restoreListView(snapshot: SessionSnapshot): Promise<boolean> {
-        const listTargetId = snapshot.listTargetVideoId ?? this.findListTargetInStack(snapshot.viewStack);
+        const fromStack = this.findListTargetInStack(snapshot.viewStack);
+        const listTargetId = snapshot.listTargetVideoId ?? fromStack.videoId;
+        const savedPage = snapshot.listCurrentPage ?? fromStack.page;
 
         if (listTargetId) this.restore.start(listTargetId);
-        await this.searchState.search(this.inputQuery);
+
+        if (savedPage && savedPage > 1) {
+            // Fast path: jump directly to saved page (sentinel is out of the DOM)
+            this.searchState.currentQuery = this.inputQuery;
+            storage.setString('lastQuery', this.inputQuery);
+            await this.searchState.restoreToPage(savedPage, this.restore.signal);
+        } else {
+            await this.searchState.search(this.inputQuery);
+        }
+
         if (listTargetId && this.restore.isActive) {
             this.restore.transition('paginating-to-target');
             void this.bgPaginateToTarget();
@@ -260,39 +272,65 @@ class AppState {
     }
 
     private async restoreChannelView(snapshot: SessionSnapshot): Promise<boolean> {
-        const listTargetId = snapshot.listTargetVideoId ?? this.findListTargetInStack(snapshot.viewStack);
+        const fromStack = this.findListTargetInStack(snapshot.viewStack);
+        const listTargetId = snapshot.listTargetVideoId ?? fromStack.videoId;
+        const listSavedPage = snapshot.listCurrentPage ?? fromStack.page;
 
         // Restore list in background (fire-and-forget, no signal)
-        void this.searchState.search(this.inputQuery).then(() => {
-            if (listTargetId) {
-                void this.bgPaginateAndPark(listTargetId);
-            }
-        });
+        if (listSavedPage && listSavedPage > 1) {
+            this.searchState.currentQuery = this.inputQuery;
+            void this.searchState.restoreToPage(listSavedPage).then(() => {
+                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
+            });
+        } else {
+            void this.searchState.search(this.inputQuery).then(() => {
+                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
+            });
+        }
 
         // Restore the view stack and open channel
         this.ui.setViewDirect('channel', snapshot.viewStack);
-        await this.channel.openChannel(snapshot.activeChannel!);
 
-        // Paginate channel to target if needed
         const channelTargetId = snapshot.channelTargetVideoId;
-        if (channelTargetId) {
-            this.restore.start(channelTargetId);
-            this.restore.transition('paginating-to-target');
-            void this.bgPaginateChannelToTarget(channelTargetId);
+        const channelSavedPage = snapshot.channelCurrentPage;
+
+        if (channelSavedPage && channelSavedPage > 1) {
+            // Fast path: set metadata, jump to saved page (sentinel is out of the DOM)
+            this.channel.setChannel(snapshot.activeChannel!);
+            if (channelTargetId) this.restore.start(channelTargetId);
+            await this.channel.restoreToPage(channelSavedPage, this.restore.signal);
+            if (channelTargetId && this.restore.isActive) {
+                this.restore.transition('paginating-to-target');
+                void this.bgPaginateChannelToTarget(channelTargetId);
+            }
+        } else {
+            await this.channel.openChannel(snapshot.activeChannel!);
+            if (channelTargetId) {
+                this.restore.start(channelTargetId);
+                this.restore.transition('paginating-to-target');
+                void this.bgPaginateChannelToTarget(channelTargetId);
+            }
         }
 
         return true;
     }
 
     private async restoreFavoritesView(snapshot: SessionSnapshot): Promise<boolean> {
-        const listTargetId = snapshot.listTargetVideoId ?? this.findListTargetInStack(snapshot.viewStack);
+        const fromStack = this.findListTargetInStack(snapshot.viewStack);
+        const listTargetId = snapshot.listTargetVideoId ?? fromStack.videoId;
+        const listSavedPage = snapshot.listCurrentPage ?? fromStack.page;
 
         // Restore list in background (fire-and-forget, no signal)
-        void this.searchState.search(this.inputQuery).then(() => {
-            if (listTargetId) {
-                void this.bgPaginateAndPark(listTargetId);
-            }
-        });
+        if (listSavedPage && listSavedPage > 1) {
+            this.searchState.currentQuery = this.inputQuery;
+            void this.searchState.restoreToPage(listSavedPage).then(() => {
+                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
+            });
+        } else {
+            void this.searchState.search(this.inputQuery).then(() => {
+                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
+            });
+        }
 
         this.ui.setViewDirect('favorites', snapshot.viewStack);
 
@@ -307,15 +345,15 @@ class AppState {
     }
 
     /**
-     * Find the list view's targetVideoId from the view stack frames.
+     * Find the list view's target from the view stack frames.
      */
-    private findListTargetInStack(stack: ViewFrame[]): string | undefined {
+    private findListTargetInStack(stack: ViewFrame[]): { videoId?: string; page?: number } {
         for (const frame of stack) {
             if (frame.mode === 'list' && frame.targetVideoId) {
-                return frame.targetVideoId;
+                return { videoId: frame.targetVideoId, page: frame.targetVideoPage };
             }
         }
-        return undefined;
+        return {};
     }
 
     /**

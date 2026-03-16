@@ -67,7 +67,7 @@
 
     <VideoList videos={filteredResults} />
 
-    {#if hasMore}
+    {#if hasMore && !appState.isRestoring}
         <div class="sentinel" use:sentinel={{
             getRoot: () => document.getElementById('view-list'),
             rootMargin: SENTINEL_ROOT_MARGIN,
