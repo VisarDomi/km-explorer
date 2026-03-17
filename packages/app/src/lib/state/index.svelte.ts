@@ -572,7 +572,10 @@ class AppState {
         const view = this.ui.viewMode;
         if (view === 'list') {
             await this.searchState.search(this.searchState.currentQuery);
+        } else if (view === 'channel' && this.channel.activeChannel) {
+            await this.channel.openChannel(this.channel.activeChannel);
         }
+        // favorites: local data, no refresh needed
     }
 
     // --- iOS background sentinel ---
