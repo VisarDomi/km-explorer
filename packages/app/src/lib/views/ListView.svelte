@@ -7,12 +7,7 @@
     import VideoList from '$lib/components/VideoList.svelte';
 
     const results = $derived(appState.searchState.results);
-    const filteredResults = $derived(results.filter(v => {
-        const detail = appState.videoDetails.getDetail(v.pageUrl);
-        if (!detail) return true; // not scraped yet, keep showing
-        return detail.actors.length > 0;
-    }));
-    const total = $derived(filteredResults.length);
+    const total = $derived(results.length);
     const query = $derived(appState.searchState.currentQuery);
     const isLoading = $derived(appState.searchState.isLoading);
     const hasMore = $derived(appState.searchState.hasMore);
@@ -65,7 +60,7 @@
         </div>
     {/if}
 
-    <VideoList videos={filteredResults} />
+    <VideoList videos={results} />
 
     {#if hasMore && !appState.isRestoring}
         <div class="sentinel" use:sentinel={{

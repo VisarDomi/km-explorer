@@ -77,8 +77,9 @@ export class ChannelState {
 
         try {
             const data = await api.fetchChannel(this.activeChannel.url, this.currentPage);
-            const seen = new Set(this.videos.map(v => v.id));
-            const deduped = data.items.filter(v => !seen.has(v.id));
+            const seenIds = new Set(this.videos.map(v => v.id));
+            const seenUrls = new Set(this.videos.map(v => v.pageUrl));
+            const deduped = data.items.filter(v => !seenIds.has(v.id) && !seenUrls.has(v.pageUrl));
             this.videos = [...this.videos, ...deduped];
             this.hasMore = data.hasMore;
             for (const v of deduped) this.videoPageMap.set(v.id, this.currentPage);
@@ -99,8 +100,9 @@ export class ChannelState {
             try {
                 const data = await api.fetchChannel(this.activeChannel!.url, this.currentPage, signal);
                 if (signal?.aborted) return false;
-                const seen = new Set(this.videos.map(v => v.id));
-                const deduped = data.items.filter(v => !seen.has(v.id));
+                const seenIds = new Set(this.videos.map(v => v.id));
+                const seenUrls = new Set(this.videos.map(v => v.pageUrl));
+                const deduped = data.items.filter(v => !seenIds.has(v.id) && !seenUrls.has(v.pageUrl));
                 this.videos = [...this.videos, ...deduped];
                 this.hasMore = data.hasMore;
                 for (const v of deduped) this.videoPageMap.set(v.id, this.currentPage);

@@ -16,6 +16,7 @@
 
     const detail = $derived(appState.videoDetails.getDetail(video.pageUrl));
     const status = $derived(appState.videoDetails.getStatus(video.pageUrl));
+    const blackout = $derived(detail != null && detail.actors.length === 0);
 
     let showActorDropdown = $state(false);
 
@@ -145,42 +146,46 @@
     }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-    class="video-card"
-    class:activating={cardState === 'activating'}
-    class:copied={cardState === 'copied'}
-    data-video-id={video.id}
-    onclick={handleCardClick}
->
-    <div class="thumb-wrapper">
-        <img src={thumbnailUrl} alt="" loading="eager" onerror={handleImgError} />
-        <button class="fav-btn" class:fav-active={isFav} onclick={handleFav}>
-            {isFav ? '\u2764' : '\u2661'}
-        </button>
-        {#if cardState === 'activating'}
-            <div class="loading-overlay">
-                <span class="card-spinner"></span>
-            </div>
-        {:else if cardState === 'copied'}
-            <div class="copied-overlay">Copied</div>
-        {/if}
-        {#if showActorDropdown && detail?.actors && detail.actors.length > 1}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="actor-overlay" onclick={handleDropdownDismiss}>
-                <div class="actor-dropdown">
-                    {#each detail.actors as actor (actor.url)}
-                        <button class="actor-item" onclick={(e) => handleActorSelect(e, actor)}>
-                            {actor.name}
-                        </button>
-                    {/each}
+{#if blackout}
+    <div class="video-card blackout" data-video-id={video.id}></div>
+{:else}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="video-card"
+        class:activating={cardState === 'activating'}
+        class:copied={cardState === 'copied'}
+        data-video-id={video.id}
+        onclick={handleCardClick}
+    >
+        <div class="thumb-wrapper">
+            <img src={thumbnailUrl} alt="" loading="eager" onerror={handleImgError} />
+            <button class="fav-btn" class:fav-active={isFav} onclick={handleFav}>
+                {isFav ? '\u2764' : '\u2661'}
+            </button>
+            {#if cardState === 'activating'}
+                <div class="loading-overlay">
+                    <span class="card-spinner"></span>
                 </div>
-            </div>
-        {/if}
+            {:else if cardState === 'copied'}
+                <div class="copied-overlay">Copied</div>
+            {/if}
+            {#if showActorDropdown && detail?.actors && detail.actors.length > 1}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="actor-overlay" onclick={handleDropdownDismiss}>
+                    <div class="actor-dropdown">
+                        {#each detail.actors as actor (actor.url)}
+                            <button class="actor-item" onclick={(e) => handleActorSelect(e, actor)}>
+                                {actor.name}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+            {/if}
+        </div>
     </div>
-</div>
+{/if}
 
 <style>
 .video-card {
@@ -190,6 +195,12 @@
     overflow: hidden;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+}
+
+.video-card.blackout {
+    background: #000;
+    cursor: default;
+    pointer-events: none;
 }
 
 .video-card:active:not(.activating) {

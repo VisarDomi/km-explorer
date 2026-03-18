@@ -111,8 +111,9 @@ export class SearchState {
             ? await api.searchVideos(this.currentQuery, page, signal)
             : await api.fetchLatest(page, signal);
         if (signal?.aborted) return [];
-        const seen = new Set(this.results.map(v => v.id));
-        const deduped = data.items.filter(v => !seen.has(v.id));
+        const seenIds = new Set(this.results.map(v => v.id));
+        const seenUrls = new Set(this.results.map(v => v.pageUrl));
+        const deduped = data.items.filter(v => !seenIds.has(v.id) && !seenUrls.has(v.pageUrl));
         this.results = [...this.results, ...deduped];
         this.hasMore = data.hasMore;
         for (const v of deduped) this.videoPageMap.set(v.id, page);

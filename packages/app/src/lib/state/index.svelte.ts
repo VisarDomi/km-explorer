@@ -336,7 +336,7 @@ class AppState {
 
         const favTargetId = snapshot.favoritesTargetVideoId;
         if (favTargetId) {
-            void this.waitForLayout('view-favorites').then(() => {
+            void this.waitForLayout('view-favorites', '.favorites-content').then(() => {
                 this.scrollToTarget(favTargetId, '#view-favorites');
             });
         }
@@ -410,7 +410,7 @@ class AppState {
         try {
             if (this.channel.videos.some(v => v.id === targetId)) {
                 this.restore.transition('scrolling');
-                await this.waitForLayout('view-channel');
+                await this.waitForLayout('view-channel', '.channel-content');
                 if (!this.restore.isActive) return;
                 const scrolled = this.scrollToTarget(targetId, '#view-channel');
                 if (!scrolled) this.showScrollToast(targetId, '#view-channel');
@@ -423,7 +423,7 @@ class AppState {
 
             if (found) {
                 this.restore.transition('scrolling');
-                await this.waitForLayout('view-channel');
+                await this.waitForLayout('view-channel', '.channel-content');
                 if (!this.restore.isActive) return;
                 const scrolled = this.scrollToTarget(targetId, '#view-channel');
                 if (!scrolled) this.showScrollToast(targetId, '#view-channel');
@@ -442,10 +442,12 @@ class AppState {
         this.restore.done();
     }
 
-    private waitForLayout(containerId = 'view-list'): Promise<void> {
+    private waitForLayout(containerId = 'view-list', scrollSelector?: string): Promise<void> {
         return new Promise(resolve => {
             const check = () => {
-                const el = document.getElementById(containerId);
+                const root = document.getElementById(containerId);
+                if (!root) { setTimeout(check, 16); return; }
+                const el = scrollSelector ? root.querySelector(scrollSelector) as HTMLElement | null : root;
                 if (el && el.scrollHeight > el.clientHeight) {
                     resolve();
                 } else {
