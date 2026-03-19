@@ -1,18 +1,10 @@
-import type { ViewMode, ViewFrame } from '../types.js';
+import type { NavEntry } from './navStack.svelte.js';
 import * as storage from '../services/storage.js';
 
 const SESSION_KEY = 'session';
 
 export interface SessionSnapshot {
-    viewMode: ViewMode;
-    viewStack: ViewFrame[];
-    activeChannel?: { name: string; url: string };
-    searchQuery?: string;
-    listTargetVideoId?: string;
-    listCurrentPage?: number;
-    channelTargetVideoId?: string;
-    channelCurrentPage?: number;
-    favoritesTargetVideoId?: string;
+    entries: NavEntry[];
 }
 
 export function saveSession(snapshot: SessionSnapshot): void {
@@ -21,8 +13,4 @@ export function saveSession(snapshot: SessionSnapshot): void {
 
 export function loadSession(): SessionSnapshot | null {
     return storage.getJson<SessionSnapshot | null>(SESSION_KEY, null);
-}
-
-export function clearSession(): void {
-    storage.remove(SESSION_KEY);
 }

@@ -1,61 +1,32 @@
 import { ConnectionMonitor } from '../services/ConnectionMonitor.svelte.js';
 import { watchdog } from '../services/WatchdogService.js';
 import { UIState } from './ui.svelte.js';
+import { NavStack, type NavEntry } from './navStack.svelte.js';
 import { SearchState } from './search.svelte.js';
 import { ChannelState } from './channel.svelte.js';
 import { FavoritesState } from './favorites.svelte.js';
 import { VideoDetailState } from './videoDetail.svelte.js';
 import { ToastState } from './toast.svelte.js';
-import { saveSession, loadSession, clearSession, type SessionSnapshot } from './session.js';
+import { saveSession, loadSession } from './session.js';
 import { RESUME_RECOVERY_MS, DEEP_SLEEP_MS, VISIBLE_VIDEO_DEBOUNCE_MS, SESSION_TOAST_DURATION } from '../constants.js';
 import * as storage from '../services/storage.js';
-import type { Actor, VideoStub, ViewFrame, ViewMode } from '../types.js';
+import type { Actor, VideoStub } from '../types.js';
 
 export type AppStatus = 'BOOTING' | 'READY' | 'BACKGROUND' | 'RECONNECTING' | 'OFFLINE';
 
-type RestorePhase = 'replaying-search' | 'paginating-to-target' | 'scrolling';
-type RestoreInner =
-    | { kind: 'idle' }
-    | { kind: 'active'; phase: RestorePhase; controller: AbortController; targetId: string };
-
-class RestoreMachine {
-    private inner = $state<RestoreInner>({ kind: 'idle' });
-
-    get isActive() { return this.inner.kind === 'active'; }
-    get signal() { return this.inner.kind === 'active' ? this.inner.controller.signal : undefined; }
-    get targetVideoId() { return this.inner.kind === 'active' ? this.inner.targetId : null; }
-    get phase() { return this.inner.kind === 'active' ? this.inner.phase : null; }
-
-    start(targetId: string) {
-        this.cancel();
-        this.inner = { kind: 'active', phase: 'replaying-search', controller: new AbortController(), targetId };
-    }
-
-    transition(next: 'paginating-to-target' | 'scrolling') {
-        if (this.inner.kind !== 'active') return;
-        this.inner = { ...this.inner, phase: next };
-    }
-
-    cancel() {
-        if (this.inner.kind !== 'active') return;
-        this.inner.controller.abort();
-        this.inner = { kind: 'idle' };
-    }
-
-    done() {
-        this.inner = { kind: 'idle' };
-    }
-}
-
 class AppState {
     ui = new UIState();
+    nav = new NavStack();
     toast = new ToastState();
     searchState: SearchState;
     channel: ChannelState;
     favorites: FavoritesState;
     videoDetails = new VideoDetailState();
     inputQuery = $state(storage.getString('lastQuery', ''));
-    get isRestoring() { return this.restore.isActive; }
+
+    // Restore
+    private restoreController: AbortController | null = null;
+    get isRestoring() { return this.restoreController !== null; }
 
     // Lifecycle
     status = $state<AppStatus>('BOOTING');
@@ -64,9 +35,7 @@ class AppState {
     private bgSentinelId: ReturnType<typeof setInterval> | null = null;
     private bgSentinelTick = 0;
 
-    // Scroll restore
-    private restore = new RestoreMachine();
-    private lastVisibleVideoIds: Record<ViewMode, string | null> = { list: null, channel: null, favorites: null };
+    // Scroll
     private visibleVideoDebounce: ReturnType<typeof setTimeout> | null = null;
     private initialized = false;
 
@@ -77,66 +46,50 @@ class AppState {
         );
         this.channel = new ChannelState(this.toast);
         this.favorites = new FavoritesState(this.toast);
-
-        // Wire up session save on every view transition
-        this.ui.onViewChange = () => this.persistSession();
-
-        // Wire up scroll target capture: moves lastVisibleVideoId + page into the pushed frame
-        this.ui.captureScrollTarget = () => {
-            const viewMode = this.ui.viewMode;
-            const videoId = this.lastVisibleVideoIds[viewMode] ?? undefined;
-            this.lastVisibleVideoIds[viewMode] = null;
-            if (!videoId) return {};
-            const page = viewMode === 'channel'
-                ? this.channel.pageOf(videoId)
-                : this.searchState.pageOf(videoId);
-            return { videoId, page };
-        };
-
-        // Wire up frame restore: when popping back, scroll to the frame's target
-        this.ui.onFrameRestored = (frame) => {
-            if (frame.targetVideoId) {
-                const container = frame.mode === 'favorites' ? '#view-favorites' : undefined;
-                this.scrollToTarget(frame.targetVideoId!, container);
-            }
-        };
-
-        // Cancel restore when a new user-initiated search fires (unless we're replaying)
-        this.searchState.onNewSearch = () => {
-            if (this.restore.phase !== 'replaying-search') {
-                this.restore.cancel();
-            }
-        };
     }
 
     // --- Navigation ---
 
     async openChannel(actor: Actor) {
-        this.restore.cancel();
-        this.ui.pushView('channel');
+        this.cancelRestore();
+        this.nav.push({ mode: 'channel', actor, page: 1, scrollTarget: null });
+        this.persistSession();
         await this.channel.openChannel(actor);
     }
 
     prepareBackNavigation() {
-        const stack = this.ui.viewStack;
-        if (stack.length === 0) return;
-        const frame = stack[stack.length - 1];
-        if (frame.targetVideoId) {
-            this.scrollToTarget(frame.targetVideoId);
+        if (!this.nav.canGoBack()) return;
+        const backEntry = this.nav.entries[this.nav.entries.length - 2];
+        if (backEntry.scrollTarget) {
+            const container = backEntry.mode === 'favorites' ? '#view-favorites' : undefined;
+            this.scrollToTarget(backEntry.scrollTarget, container);
         }
     }
 
     closeChannel() {
-        this.ui.popView();
+        this.nav.pop();
         this.channel.close();
+        this.ui.bumpListGeneration();
+        const fg = this.nav.foreground;
+        if (fg.scrollTarget) {
+            this.scrollToTarget(fg.scrollTarget);
+        }
+        this.persistSession();
     }
 
     openFavorites() {
-        this.ui.pushView('favorites');
+        this.nav.push({ mode: 'favorites', scrollTarget: null });
+        this.persistSession();
     }
 
     closeFavorites() {
-        this.ui.popView();
+        this.nav.pop();
+        this.ui.bumpListGeneration();
+        const fg = this.nav.foreground;
+        if (fg.scrollTarget) {
+            this.scrollToTarget(fg.scrollTarget);
+        }
+        this.persistSession();
     }
 
     toggleFavorite(video: VideoStub) {
@@ -144,10 +97,17 @@ class AppState {
     }
 
     submitSearch(query: string) {
-        this.restore.cancel();
-        this.lastVisibleVideoIds.list = null;
-        this.ui.resetTo('list');
+        this.cancelRestore();
+        this.nav.resetToList(query);
+        this.ui.bumpListGeneration();
         this.searchState.search(query);
+    }
+
+    private cancelRestore() {
+        if (this.restoreController) {
+            this.restoreController.abort();
+            this.restoreController = null;
+        }
     }
 
     private recoverScrollContainers() {
@@ -168,8 +128,7 @@ class AppState {
     // --- Visible video tracking ---
 
     trackVisibleVideo(videoId: string, immediate = false) {
-        const viewMode = this.ui.viewMode;
-        this.lastVisibleVideoIds[viewMode] = videoId;
+        this.nav.updateScrollTarget(videoId);
 
         if (this.visibleVideoDebounce) clearTimeout(this.visibleVideoDebounce);
 
@@ -181,266 +140,160 @@ class AppState {
 
         this.visibleVideoDebounce = setTimeout(() => {
             this.visibleVideoDebounce = null;
-            if (viewMode === 'list' || viewMode === 'channel' || viewMode === 'favorites') {
-                this.persistSession();
-            }
+            this.persistSession();
         }, VISIBLE_VIDEO_DEBOUNCE_MS);
     }
 
     // --- Session persistence ---
 
     private persistSession() {
-        const snapshot: SessionSnapshot = {
-            viewMode: this.ui.viewMode,
-            viewStack: $state.snapshot(this.ui.viewStack),
-        };
-
-        if (this.channel.activeChannel) {
-            snapshot.activeChannel = $state.snapshot(this.channel.activeChannel);
+        const entries = this.nav.serialize();
+        // Enrich page values from data stores
+        for (const entry of entries) {
+            if (entry.mode === 'list' && entry.scrollTarget) {
+                const page = this.searchState.pageOf(entry.scrollTarget);
+                if (page) entry.page = page;
+            } else if (entry.mode === 'channel' && entry.scrollTarget) {
+                const page = this.channel.pageOf(entry.scrollTarget);
+                if (page) entry.page = page;
+            }
         }
-
-        if (this.searchState.currentQuery) {
-            snapshot.searchQuery = this.searchState.currentQuery;
-        }
-
-        const listTarget = this.lastVisibleVideoIds.list;
-        if (listTarget) {
-            snapshot.listTargetVideoId = listTarget;
-            snapshot.listCurrentPage = this.searchState.pageOf(listTarget);
-        }
-
-        const channelTarget = this.lastVisibleVideoIds.channel;
-        if (channelTarget) {
-            snapshot.channelTargetVideoId = channelTarget;
-            snapshot.channelCurrentPage = this.channel.pageOf(channelTarget);
-        }
-
-        const favTarget = this.lastVisibleVideoIds.favorites;
-        if (favTarget) snapshot.favoritesTargetVideoId = favTarget;
-
-        saveSession(snapshot);
+        saveSession({ entries });
     }
 
     // --- Session restore ---
 
     private async restoreSession(): Promise<boolean> {
         const snapshot = loadSession();
+        if (!snapshot?.entries?.length) return false;
 
-        if (!snapshot) return false;
+        const entries = snapshot.entries;
+        if (entries[0].mode !== 'list') return false;
 
-        clearSession();
+        this.nav.restoreFrom(entries);
+        const listEntry = entries[0] as Extract<NavEntry, { mode: 'list' }>;
+        const foreground = entries[entries.length - 1];
 
-        if (snapshot.searchQuery) {
-            this.inputQuery = snapshot.searchQuery;
-        }
+        this.restoreController = new AbortController();
+        const restoreSignal = this.restoreController.signal;
 
-        if (snapshot.viewMode === 'list') {
-            return this.restoreListView(snapshot);
-        }
-        if (snapshot.viewMode === 'channel' && snapshot.activeChannel) {
-            return this.restoreChannelView(snapshot);
-        }
-        if (snapshot.viewMode === 'favorites') {
-            return this.restoreFavoritesView(snapshot);
-        }
+        // Set input query from list entry
+        this.inputQuery = listEntry.query;
 
-        return false;
-    }
-
-    private async restoreListView(snapshot: SessionSnapshot): Promise<boolean> {
-        const fromStack = this.findListTargetInStack(snapshot.viewStack);
-        const listTargetId = snapshot.listTargetVideoId ?? fromStack.videoId;
-        const savedPage = snapshot.listCurrentPage ?? fromStack.page;
-
-        if (listTargetId) this.restore.start(listTargetId);
-
-        if (savedPage && savedPage > 1) {
-            // Fast path: jump directly to saved page (sentinel is out of the DOM)
-            this.searchState.currentQuery = this.inputQuery;
-            storage.setString('lastQuery', this.inputQuery);
-            await this.searchState.restoreToPage(savedPage, this.restore.signal);
+        // Step 1: Restore list data
+        if (listEntry.page > 1) {
+            const token = this.searchState.writeGate.acquire('restore');
+            this.searchState.currentQuery = listEntry.query;
+            storage.setString('lastQuery', listEntry.query);
+            await this.searchState.restoreToPage(listEntry.page, token.signal);
+            if (!token.cancelled) this.searchState.writeGate.release(token);
         } else {
-            await this.searchState.search(this.inputQuery);
+            const token = this.searchState.writeGate.acquire('restore');
+            await this.searchState.search(listEntry.query, token);
         }
 
-        if (listTargetId && this.restore.isActive) {
-            this.restore.transition('paginating-to-target');
-            void this.bgPaginateToTarget();
+        if (restoreSignal.aborted) return true;
+
+        // Step 2: Mode-specific restore
+        if (foreground.mode === 'list') {
+            await this.restoreForegroundList(foreground, restoreSignal);
+        } else if (foreground.mode === 'channel') {
+            await this.restoreForegroundChannel(foreground, listEntry, restoreSignal);
+        } else if (foreground.mode === 'favorites') {
+            this.restoreForegroundFavorites(foreground, listEntry);
+        }
+
+        if (!restoreSignal.aborted) {
+            this.restoreController = null;
+            this.persistSession();
         }
 
         return true;
     }
 
-    private async restoreChannelView(snapshot: SessionSnapshot): Promise<boolean> {
-        const fromStack = this.findListTargetInStack(snapshot.viewStack);
-        const listTargetId = snapshot.listTargetVideoId ?? fromStack.videoId;
-        const listSavedPage = snapshot.listCurrentPage ?? fromStack.page;
+    private async restoreForegroundList(
+        entry: Extract<NavEntry, { mode: 'list' }>,
+        restoreSignal: AbortSignal,
+    ) {
+        if (!entry.scrollTarget) return;
 
-        // Restore list in background (fire-and-forget, no signal)
-        if (listSavedPage && listSavedPage > 1) {
-            this.searchState.currentQuery = this.inputQuery;
-            void this.searchState.restoreToPage(listSavedPage).then(() => {
-                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
-            });
-        } else {
-            void this.searchState.search(this.inputQuery).then(() => {
-                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
-            });
-        }
+        const token = this.searchState.writeGate.acquire('restore-paginate');
+        const found = await this.searchState.paginateToTarget(entry.scrollTarget, token.signal);
+        if (!token.cancelled) this.searchState.writeGate.release(token);
 
-        // Restore the view stack and open channel
-        this.ui.setViewDirect('channel', snapshot.viewStack);
-
-        const channelTargetId = snapshot.channelTargetVideoId;
-        const channelSavedPage = snapshot.channelCurrentPage;
-
-        if (channelSavedPage && channelSavedPage > 1) {
-            // Fast path: set metadata, jump to saved page (sentinel is out of the DOM)
-            this.channel.setChannel(snapshot.activeChannel!);
-            if (channelTargetId) this.restore.start(channelTargetId);
-            await this.channel.restoreToPage(channelSavedPage, this.restore.signal);
-            if (channelTargetId && this.restore.isActive) {
-                this.restore.transition('paginating-to-target');
-                void this.bgPaginateChannelToTarget(channelTargetId);
-            }
-        } else {
-            await this.channel.openChannel(snapshot.activeChannel!);
-            if (channelTargetId) {
-                this.restore.start(channelTargetId);
-                this.restore.transition('paginating-to-target');
-                void this.bgPaginateChannelToTarget(channelTargetId);
+        if (found && !restoreSignal.aborted) {
+            await this.waitForLayout();
+            if (!restoreSignal.aborted) {
+                const scrolled = this.scrollToTarget(entry.scrollTarget);
+                if (!scrolled) this.showScrollToast(entry.scrollTarget);
             }
         }
-
-        return true;
     }
 
-    private async restoreFavoritesView(snapshot: SessionSnapshot): Promise<boolean> {
-        const fromStack = this.findListTargetInStack(snapshot.viewStack);
-        const listTargetId = snapshot.listTargetVideoId ?? fromStack.videoId;
-        const listSavedPage = snapshot.listCurrentPage ?? fromStack.page;
-
-        // Restore list in background (fire-and-forget, no signal)
-        if (listSavedPage && listSavedPage > 1) {
-            this.searchState.currentQuery = this.inputQuery;
-            void this.searchState.restoreToPage(listSavedPage).then(() => {
-                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
-            });
-        } else {
-            void this.searchState.search(this.inputQuery).then(() => {
-                if (listTargetId) void this.bgPaginateAndPark(listTargetId);
+    private async restoreForegroundChannel(
+        channelEntry: Extract<NavEntry, { mode: 'channel' }>,
+        listEntry: Extract<NavEntry, { mode: 'list' }>,
+        restoreSignal: AbortSignal,
+    ) {
+        // Background: paginate list to its scroll target (gate prevents sentinel interference)
+        if (listEntry.scrollTarget) {
+            const bgToken = this.searchState.writeGate.acquire('bg-park');
+            void this.searchState.paginateToTarget(listEntry.scrollTarget, bgToken.signal).finally(() => {
+                if (!bgToken.cancelled) this.searchState.writeGate.release(bgToken);
             });
         }
 
-        this.ui.setViewDirect('favorites', snapshot.viewStack);
+        // Foreground: restore channel
+        if (channelEntry.page > 1) {
+            this.channel.setChannel(channelEntry.actor);
+            const token = this.channel.writeGate.acquire('restore');
+            await this.channel.restoreToPage(channelEntry.page, token.signal);
+            if (!token.cancelled) this.channel.writeGate.release(token);
+        } else {
+            const token = this.channel.writeGate.acquire('restore');
+            await this.channel.openChannel(channelEntry.actor, token);
+        }
 
-        const favTargetId = snapshot.favoritesTargetVideoId;
-        if (favTargetId) {
+        if (restoreSignal.aborted) return;
+
+        if (channelEntry.scrollTarget) {
+            const token = this.channel.writeGate.acquire('restore-paginate');
+            const found = await this.channel.paginateToTarget(channelEntry.scrollTarget, token.signal);
+            if (!token.cancelled) this.channel.writeGate.release(token);
+
+            if (found && !restoreSignal.aborted) {
+                await this.waitForLayout('view-channel', '.channel-content');
+                if (!restoreSignal.aborted) {
+                    const scrolled = this.scrollToTarget(channelEntry.scrollTarget, '#view-channel');
+                    if (!scrolled) this.showScrollToast(channelEntry.scrollTarget, '#view-channel');
+                }
+            }
+        }
+    }
+
+    private restoreForegroundFavorites(
+        favEntry: Extract<NavEntry, { mode: 'favorites' }>,
+        listEntry: Extract<NavEntry, { mode: 'list' }>,
+    ) {
+        // Background: paginate list to its scroll target
+        if (listEntry.scrollTarget) {
+            const bgToken = this.searchState.writeGate.acquire('bg-park');
+            void this.searchState.paginateToTarget(listEntry.scrollTarget, bgToken.signal).finally(() => {
+                if (!bgToken.cancelled) this.searchState.writeGate.release(bgToken);
+            });
+        }
+
+        if (favEntry.scrollTarget) {
+            const targetId = favEntry.scrollTarget;
             void this.waitForLayout('view-favorites', '.favorites-content').then(() => {
-                this.scrollToTarget(favTargetId, '#view-favorites');
+                if (!this.restoreController?.signal.aborted) {
+                    this.scrollToTarget(targetId, '#view-favorites');
+                }
             });
-        }
-
-        return true;
-    }
-
-    /**
-     * Find the list view's target from the view stack frames.
-     */
-    private findListTargetInStack(stack: ViewFrame[]): { videoId?: string; page?: number } {
-        for (const frame of stack) {
-            if (frame.mode === 'list' && frame.targetVideoId) {
-                return { videoId: frame.targetVideoId, page: frame.targetVideoPage };
-            }
-        }
-        return {};
-    }
-
-    /**
-     * Paginate search results until the list's target video is present,
-     * but don't scroll — just park the results so they're ready when user pops back.
-     * Fire-and-forget: does NOT use restore.signal.
-     */
-    private async bgPaginateAndPark(targetId: string) {
-        try {
-            if (this.searchState.results.some(v => v.id === targetId)) return;
-            await this.searchState.paginateToTarget(targetId);
-        } catch {
-            // Best-effort: if pagination fails, list will just show page 1
         }
     }
 
     // --- Scroll restore helpers ---
-
-    private async bgPaginateToTarget() {
-        const targetId = this.restore.targetVideoId;
-        if (!targetId || !this.restore.isActive) {
-            this.restore.done();
-            return;
-        }
-
-        try {
-            if (this.searchState.results.some(v => v.id === targetId)) {
-                this.restore.transition('scrolling');
-                await this.waitForLayout();
-                if (!this.restore.isActive) return;
-                this.onTargetFound(targetId);
-                return;
-            }
-
-            const found = await this.searchState.paginateToTarget(targetId, this.restore.signal);
-            if (!this.restore.isActive) return;
-
-            if (found) {
-                this.restore.transition('scrolling');
-                await this.waitForLayout();
-                if (!this.restore.isActive) return;
-                this.onTargetFound(targetId);
-            } else {
-                this.restore.done();
-            }
-        } catch {
-            this.restore.done();
-        }
-    }
-
-    private async bgPaginateChannelToTarget(targetId: string) {
-        if (!this.restore.isActive) return;
-
-        try {
-            if (this.channel.videos.some(v => v.id === targetId)) {
-                this.restore.transition('scrolling');
-                await this.waitForLayout('view-channel', '.channel-content');
-                if (!this.restore.isActive) return;
-                const scrolled = this.scrollToTarget(targetId, '#view-channel');
-                if (!scrolled) this.showScrollToast(targetId, '#view-channel');
-                this.restore.done();
-                return;
-            }
-
-            const found = await this.channel.paginateToTarget(targetId, this.restore.signal);
-            if (!this.restore.isActive) return;
-
-            if (found) {
-                this.restore.transition('scrolling');
-                await this.waitForLayout('view-channel', '.channel-content');
-                if (!this.restore.isActive) return;
-                const scrolled = this.scrollToTarget(targetId, '#view-channel');
-                if (!scrolled) this.showScrollToast(targetId, '#view-channel');
-                this.restore.done();
-            } else {
-                this.restore.done();
-            }
-        } catch {
-            this.restore.done();
-        }
-    }
-
-    private onTargetFound(targetId: string) {
-        const scrolled = this.scrollToTarget(targetId);
-        if (!scrolled) this.showScrollToast(targetId);
-        this.restore.done();
-    }
 
     private waitForLayout(containerId = 'view-list', scrollSelector?: string): Promise<void> {
         return new Promise(resolve => {
@@ -571,7 +424,7 @@ class AppState {
     }
 
     private async refreshCurrentView() {
-        const view = this.ui.viewMode;
+        const view = this.nav.viewMode;
         if (view === 'list') {
             await this.searchState.search(this.searchState.currentQuery);
         } else if (view === 'channel' && this.channel.activeChannel) {
@@ -606,7 +459,7 @@ class AppState {
     }
 
     destroy() {
-        this.restore.cancel();
+        this.cancelRestore();
         if (this.visibleVideoDebounce) clearTimeout(this.visibleVideoDebounce);
         this.monitor.destroy();
         this.videoDetails.disconnectSSE();

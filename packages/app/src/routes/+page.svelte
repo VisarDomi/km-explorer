@@ -12,12 +12,12 @@
         appState.init();
     });
 
-    const viewMode = $derived(appState.ui.viewMode);
+    const viewMode = $derived(appState.nav.viewMode);
     const isSwiping = $derived(appState.ui.isSwiping);
     const swipeAnimating = $derived(appState.ui.swipeAnimating);
     const swipeProgress = $derived(appState.ui.swipeProgress);
 
-    const backView = $derived(isSwiping ? appState.ui.peekBack() : null);
+    const backView = $derived(isSwiping ? appState.nav.peekBack() : null);
     const inChannel = $derived(viewMode === 'channel');
     const inFavorites = $derived(viewMode === 'favorites');
 </script>

@@ -1,16 +1,19 @@
 import type { VideoStub, Actor } from '../types.js';
 import * as api from '../services/api.js';
 import type { ToastState } from './toast.svelte.js';
+import { WriteGate, type WriteToken } from './writeGate.js';
 
 export class ChannelState {
     activeChannel = $state<Actor | null>(null);
     videos = $state<VideoStub[]>([]);
     currentPage = $state(1);
     hasMore = $state(false);
-    isLoading = $state(false);
 
     private toast: ToastState;
+    readonly writeGate = new WriteGate();
     private videoPageMap = new Map<string, number>();
+
+    get isLoading() { return this.writeGate.isHeld; }
 
     constructor(toast: ToastState) {
         this.toast = toast;
@@ -26,29 +29,30 @@ export class ChannelState {
         this.videos = [];
         this.currentPage = 0;
         this.hasMore = false;
-        this.isLoading = false;
         this.videoPageMap.clear();
     }
 
-    async openChannel(actor: Actor, signal?: AbortSignal) {
+    async openChannel(actor: Actor, externalToken?: WriteToken) {
+        const token = externalToken ?? this.writeGate.acquire('user-open');
+        const signal = token.signal;
+
         this.activeChannel = actor;
         this.videos = [];
         this.currentPage = 1;
         this.hasMore = false;
-        this.isLoading = true;
         this.videoPageMap.clear();
 
         try {
             const data = await api.fetchChannel(actor.url, 1, signal);
-            if (signal?.aborted) return;
+            if (signal.aborted) return;
             this.videos = data.items;
             this.hasMore = data.hasMore;
             for (const v of data.items) this.videoPageMap.set(v.id, 1);
         } catch {
-            if (signal?.aborted) return;
+            if (signal.aborted) return;
             this.toast.show('Failed to load channel');
         } finally {
-            if (!signal?.aborted) this.isLoading = false;
+            if (!signal.aborted) this.writeGate.release(token);
         }
     }
 
@@ -70,13 +74,15 @@ export class ChannelState {
     }
 
     async loadNextPage() {
-        if (this.isLoading || !this.hasMore || !this.activeChannel) return;
+        const token = this.writeGate.tryAcquire('sentinel');
+        if (!token || !this.hasMore || !this.activeChannel) return;
 
-        this.isLoading = true;
+        const signal = token.signal;
         this.currentPage++;
 
         try {
-            const data = await api.fetchChannel(this.activeChannel.url, this.currentPage);
+            const data = await api.fetchChannel(this.activeChannel.url, this.currentPage, signal);
+            if (signal.aborted) return;
             const seenIds = new Set(this.videos.map(v => v.id));
             const seenUrls = new Set(this.videos.map(v => v.pageUrl));
             const deduped = data.items.filter(v => !seenIds.has(v.id) && !seenUrls.has(v.pageUrl));
@@ -84,10 +90,11 @@ export class ChannelState {
             this.hasMore = data.hasMore;
             for (const v of deduped) this.videoPageMap.set(v.id, this.currentPage);
         } catch {
+            if (signal.aborted) return;
             this.currentPage--;
             this.toast.show('Failed to load more');
         } finally {
-            this.isLoading = false;
+            if (!signal.aborted) this.writeGate.release(token);
         }
     }
 

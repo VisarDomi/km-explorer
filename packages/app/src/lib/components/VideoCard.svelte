@@ -21,7 +21,7 @@
     let showActorDropdown = $state(false);
 
     // On channel (detail) view, card doesn't own navigation — only copies.
-    const isDetailView = $derived(appState.ui.viewMode === 'channel');
+    const isDetailView = $derived(appState.nav.viewMode === 'channel');
 
     /**
      * Navigate to actor's channel and copy video source — atomic action.

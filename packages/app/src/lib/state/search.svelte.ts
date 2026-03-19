@@ -3,33 +3,7 @@ import type { VideoStub } from '../types.js';
 import * as api from '../services/api.js';
 import * as storage from '../services/storage.js';
 import type { ToastState } from './toast.svelte.js';
-
-type SearchMachineState = 'idle' | 'searching' | 'loading-page';
-
-class SearchMachine {
-    state = $state<SearchMachineState>('idle');
-    private controller: AbortController | null = null;
-
-    get isActive() { return this.state !== 'idle'; }
-    get signal() { return this.controller?.signal; }
-
-    enter(next: 'searching' | 'loading-page') {
-        this.controller?.abort();
-        this.controller = new AbortController();
-        this.state = next;
-    }
-
-    done() {
-        this.controller = null;
-        this.state = 'idle';
-    }
-
-    abort() {
-        this.controller?.abort();
-        this.controller = null;
-        this.state = 'idle';
-    }
-}
+import { WriteGate, type WriteToken } from './writeGate.js';
 
 export class SearchState {
     results = $state<VideoStub[]>([]);
@@ -38,13 +12,12 @@ export class SearchState {
     hasMore = $state(false);
 
     private toast: ToastState;
-    private machine = new SearchMachine();
+    readonly writeGate = new WriteGate();
     private loadingWatchdog: ReturnType<typeof setTimeout> | null = null;
     private onStuck: (() => void) | null = null;
     private videoPageMap = new Map<string, number>();
-    onNewSearch: (() => void) | null = null;
 
-    get isLoading() { return this.machine.isActive; }
+    get isLoading() { return this.writeGate.isHeld; }
 
     pageOf(videoId: string): number | undefined {
         return this.videoPageMap.get(videoId);
@@ -55,11 +28,11 @@ export class SearchState {
         this.onStuck = onStuck ?? null;
     }
 
-    private startWatchdog() {
+    private startWatchdog(token: WriteToken) {
         this.clearWatchdog();
         this.loadingWatchdog = setTimeout(() => {
-            if (this.machine.isActive) {
-                this.machine.abort();
+            if (!token.cancelled) {
+                this.writeGate.release(token);
                 this.toast.show('Loading timed out — scroll to retry');
                 this.onStuck?.();
             }
@@ -73,11 +46,10 @@ export class SearchState {
         }
     }
 
-    async search(query: string) {
-        this.onNewSearch?.();
-        this.machine.enter('searching');
-        const signal = this.machine.signal!;
-        this.startWatchdog();
+    async search(query: string, externalToken?: WriteToken) {
+        const token = externalToken ?? this.writeGate.acquire('user-search');
+        const signal = token.signal;
+        this.startWatchdog(token);
 
         this.currentQuery = query;
         this.currentPage = 1;
@@ -101,7 +73,7 @@ export class SearchState {
         } finally {
             this.clearWatchdog();
             if (!signal.aborted) {
-                this.machine.done();
+                this.writeGate.release(token);
             }
         }
     }
@@ -158,12 +130,11 @@ export class SearchState {
     }
 
     async loadNextPage() {
-        if (this.machine.isActive || !this.hasMore) return;
+        const token = this.writeGate.tryAcquire('sentinel');
+        if (!token || !this.hasMore) return;
 
-        this.machine.enter('loading-page');
-        const signal = this.machine.signal!;
-
-        this.startWatchdog();
+        const signal = token.signal;
+        this.startWatchdog(token);
         this.currentPage++;
 
         try {
@@ -175,7 +146,7 @@ export class SearchState {
         } finally {
             this.clearWatchdog();
             if (!signal.aborted) {
-                this.machine.done();
+                this.writeGate.release(token);
             }
         }
     }
