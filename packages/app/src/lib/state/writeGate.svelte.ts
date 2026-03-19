@@ -14,13 +14,12 @@ export class WriteToken {
 
 export class WriteGate {
     private controller: AbortController | null = null;
-    private token: WriteToken | null = null;
+    private token = $state<WriteToken | null>(null);
 
     get isHeld(): boolean {
         return this.token !== null && !this.token.cancelled;
     }
 
-    /** Forceful acquire — cancels previous holder. For user actions, restore. */
     acquire(owner: string): WriteToken {
         this.controller?.abort();
         this.controller = new AbortController();
@@ -28,13 +27,11 @@ export class WriteGate {
         return this.token;
     }
 
-    /** Polite acquire — returns null if gate is held. For sentinel. */
     tryAcquire(owner: string): WriteToken | null {
         if (this.isHeld) return null;
         return this.acquire(owner);
     }
 
-    /** Voluntary release of a specific token. */
     release(token: WriteToken): void {
         if (this.token === token) {
             this.token = null;

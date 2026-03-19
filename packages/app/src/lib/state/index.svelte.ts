@@ -25,7 +25,7 @@ class AppState {
     inputQuery = $state(storage.getString('lastQuery', ''));
 
     // Restore
-    private restoreController: AbortController | null = null;
+    private restoreController = $state<AbortController | null>(null);
     get isRestoring() { return this.restoreController !== null; }
 
     // Lifecycle

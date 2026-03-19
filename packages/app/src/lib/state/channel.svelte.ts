@@ -1,7 +1,7 @@
 import type { VideoStub, Actor } from '../types.js';
 import * as api from '../services/api.js';
 import type { ToastState } from './toast.svelte.js';
-import { WriteGate, type WriteToken } from './writeGate.js';
+import { WriteGate, type WriteToken } from './writeGate.svelte.js';
 
 export class ChannelState {
     activeChannel = $state<Actor | null>(null);

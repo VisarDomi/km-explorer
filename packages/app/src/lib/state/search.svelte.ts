@@ -3,7 +3,7 @@ import type { VideoStub } from '../types.js';
 import * as api from '../services/api.js';
 import * as storage from '../services/storage.js';
 import type { ToastState } from './toast.svelte.js';
-import { WriteGate, type WriteToken } from './writeGate.js';
+import { WriteGate, type WriteToken } from './writeGate.svelte.js';
 
 export class SearchState {
     results = $state<VideoStub[]>([]);
