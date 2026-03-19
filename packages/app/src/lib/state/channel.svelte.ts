@@ -74,8 +74,9 @@ export class ChannelState {
     }
 
     async loadNextPage() {
+        if (!this.hasMore || !this.activeChannel) return;
         const token = this.writeGate.tryAcquire('sentinel');
-        if (!token || !this.hasMore || !this.activeChannel) return;
+        if (!token) return;
 
         const signal = token.signal;
         this.currentPage++;

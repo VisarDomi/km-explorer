@@ -130,8 +130,9 @@ export class SearchState {
     }
 
     async loadNextPage() {
+        if (!this.hasMore) return;
         const token = this.writeGate.tryAcquire('sentinel');
-        if (!token || !this.hasMore) return;
+        if (!token) return;
 
         const signal = token.signal;
         this.startWatchdog(token);
