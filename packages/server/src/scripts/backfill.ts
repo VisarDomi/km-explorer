@@ -10,7 +10,6 @@ const DETAIL_DELAY_MS = 500;
 async function backfillVideoDetails() {
   const provider = getProvider();
 
-  // Phase 1: Collect all video URLs from Typesense (parallel batches, localhost)
   console.log('[backfill] Phase 1: Fetching all video stubs from Typesense...');
   const allStubs: VideoStub[] = [];
   const seen = new Set<string>();
@@ -34,7 +33,6 @@ async function backfillVideoDetails() {
       }),
     );
 
-    // Process in page order to maintain deterministic dedup
     for (const result of results.sort((a, b) => a.page - b.page)) {
       for (const stub of result.items) {
         if (!seen.has(stub.id)) {
@@ -51,7 +49,6 @@ async function backfillVideoDetails() {
   }
   console.log(`[backfill] Collected ${allStubs.length} stubs`);
 
-  // Phase 2: Filter to uncached URLs only
   const allUrls = allStubs.map(s => s.pageUrl);
   const cached = getCachedDetails(allUrls);
   const uncached = allStubs.filter(s => !cached.has(s.pageUrl));
@@ -62,8 +59,6 @@ async function backfillVideoDetails() {
     return;
   }
 
-  // Phase 3: Scrape details for uncached URLs
-  // setCachedDetail marks each video's actors as dirty (single transaction).
   console.log('[backfill] Scraping uncached video details...');
   let done = 0;
   let errors = 0;
@@ -96,11 +91,8 @@ async function backfillVideoDetails() {
 }
 
 async function backfillActorCache() {
-  // Only refresh actors that were marked dirty by setCachedDetail.
-  // Dirty set is populated by video detail scraping (both backfill and live scrapeQueue).
   const dirtyUrls = getDirtyActorUrls();
 
-  // Also pick up actors that have never been cached at all
   const uncachedNew = dirtyUrls.filter(url => !getCachedActor(url));
   const dirtyExisting = dirtyUrls.filter(url => getCachedActor(url));
   const total = dirtyUrls.length;
@@ -135,12 +127,10 @@ async function backfillActorCache() {
     done++;
     if (done % 10 === 0) {
       console.log(`[backfill] Actor progress: ${done}/${total} (${errors} errors)`);
-      // Clear in batches so progress survives crashes
       clearDirtyActors(completed.splice(0));
     }
   }
 
-  // Clear remaining
   clearDirtyActors(completed);
   console.log(`[backfill] Actor cache done: ${done} processed, ${errors} errors`);
 }

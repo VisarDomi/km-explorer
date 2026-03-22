@@ -3,17 +3,11 @@ import type { Response } from 'express';
 import { CACHE_MAX_AGE, USER_AGENT } from '../config';
 import { proxyFetch } from '../utils/proxyFetch';
 
-/** No domain restriction — the backend is LAN-only and CDN domains change unpredictably. */
 export function isAllowedImageDomain(_hostname: string): boolean {
   return true;
 }
 
-/**
- * Insert `-320x180` before the extension to get the WP thumbnail variant.
- * Returns null if the URL already has a size suffix.
- */
 function sizedUrl(url: string): string | null {
-  // Don't double-size a URL that already has -WxH
   if (/-\d+x\d+\.\w+$/.test(url)) return null;
   return url.replace(/(\.\w+)$/, '-320x180$1');
 }
@@ -24,7 +18,6 @@ export async function streamImage(imageUrl: string, res: Response, referer?: str
 
   let r = await proxyFetch(imageUrl, { headers });
 
-  // Fallback: if the original is blocked, try the 320x180 sized variant
   if (!r.ok) {
     const fallback = sizedUrl(imageUrl);
     if (fallback) {

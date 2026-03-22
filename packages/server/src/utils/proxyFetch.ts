@@ -34,7 +34,6 @@ export async function proxyFetch(
   const { cloudflareProtected, ...fetchInit } = init ?? {};
   const domain = new URL(url).hostname;
 
-  // Inject cached CF cookies if available
   if (cloudflareProtected) {
     const cachedCookies = getCachedCookies(domain);
     if (cachedCookies) {
@@ -53,7 +52,6 @@ export async function proxyFetch(
   console.log(`[proxy] ${new URL(url).pathname} ${r.status} ${duration}ms`);
 
   if (!r.ok && cloudflareProtected && isCloudflareBlock(r.status, r.headers.get('server'))) {
-    // If we had cached cookies and still got blocked, clear them
     if (getCachedCookies(domain)) {
       clearCachedCookies(domain);
     }
@@ -62,7 +60,6 @@ export async function proxyFetch(
       throw new CloudflareError(`Cloudflare solve in progress for ${domain}`);
     }
 
-    // Start solving in background
     solveCloudflareCookies(url).catch(err => {
       console.error(`[cloudflare] Solve failed for ${domain}:`, err.message);
     });

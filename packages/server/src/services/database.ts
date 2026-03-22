@@ -30,7 +30,6 @@ db.exec(`
   )
 `);
 
-// Migration: strip WP size suffixes from cached thumbnail URLs → use originals
 {
   const rows = db.prepare("SELECT actor_url, videos FROM actor_cache").all() as { actor_url: string; videos: string }[];
   const update = db.prepare("UPDATE actor_cache SET videos = ? WHERE actor_url = ?");
@@ -88,8 +87,6 @@ export function setCachedDetail(videoUrl: string, videoSrc: string, actors: { na
   setCachedDetailTx(videoUrl, videoSrc, actors);
 }
 
-// --- Actor cache ---
-
 export interface CachedActor {
   termId: number;
   videos: import('@km-explorer/provider-types').VideoStub[];
@@ -106,10 +103,6 @@ export function setCachedActor(actorUrl: string, termId: number, videos: import(
   upsertActor.run(actorUrl, termId, JSON.stringify(videos), Date.now());
 }
 
-// --- Dirty actor tracking ---
-// Ownership: only setCachedDetail writes to dirty_actors (via transaction).
-// Only the backfill script reads and clears dirty_actors.
-
 export function getDirtyActorUrls(): string[] {
   const rows = getDirtyActors.all() as { actor_url: string }[];
   return rows.map(r => r.actor_url);
@@ -119,4 +112,3 @@ export function clearDirtyActors(urls: string[]): void {
   if (urls.length === 0) return;
   clearDirty.run(JSON.stringify(urls));
 }
-

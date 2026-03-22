@@ -1,5 +1,3 @@
-// Shared data types used by providers and the app
-
 export interface VideoStub {
   id: string;
   title: string;
@@ -29,7 +27,6 @@ export interface HttpRequest {
   body?: string;
 }
 
-// The interface each provider implements
 export interface VideoProvider {
   readonly id: string;
   readonly name: string;

@@ -18,12 +18,10 @@ router.post('/video-details', asyncHandler(async (req, res) => {
     if (!cached.has(url)) pending.push(url);
   }
 
-  // Queue uncached URLs for scraping
   if (pending.length > 0) {
     scrapeQueue.enqueue(pending);
   }
 
-  // Convert Map to plain object for JSON
   const cachedObj: Record<string, CachedDetail> = {};
   for (const [k, v] of cached) cachedObj[k] = v;
 
@@ -36,7 +34,7 @@ router.get('/video-details/stream', (req, res) => {
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
   });
-  res.write(':\n\n'); // SSE comment to keep alive
+  res.write(':\n\n');
 
   const onDetail = (videoUrl: string, detail: CachedDetail) => {
     const data = JSON.stringify({ videoUrl, ...detail });

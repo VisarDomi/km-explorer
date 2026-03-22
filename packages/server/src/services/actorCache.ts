@@ -7,7 +7,6 @@ import type { VideoStub, PagedResult } from '@km-explorer/provider-types';
 const PAGE_DELAY_MS = 500;
 const termIdCache = new Map<string, number>();
 
-/** Resolve actor slug → WP term ID. Checks memory cache, DB cache, then WP API. */
 export async function resolveTermId(actorUrl: string): Promise<number | null> {
   const mem = termIdCache.get(actorUrl);
   if (mem !== undefined) return mem;
@@ -31,7 +30,6 @@ export async function resolveTermId(actorUrl: string): Promise<number | null> {
   return data[0].id;
 }
 
-/** Fetch ALL pages of videos for an actor term ID from WP API. */
 export async function fetchAllActorVideos(termId: number): Promise<VideoStub[]> {
   const provider = getProvider();
   const allItems: VideoStub[] = [];
@@ -48,7 +46,6 @@ export async function fetchAllActorVideos(termId: number): Promise<VideoStub[]> 
       const data = await res.json();
       result = provider.parseChannelResponse(data);
     } catch (e) {
-      // WP REST API returns 400 for pages beyond the last — treat as end
       if (e instanceof UpstreamError && e.status === 400) break;
       throw e;
     }
@@ -68,13 +65,6 @@ export async function fetchAllActorVideos(termId: number): Promise<VideoStub[]> 
   return allItems;
 }
 
-/**
- * Get actor videos: serve from cache, or cold-fill on first encounter.
- *
- * Ownership: this function is a reader. It never refreshes existing cache entries.
- * Cache invalidation is owned by the dirty_actors table, consumed by the backfill script.
- * The only write path here is the initial cold-fill for actors never seen before.
- */
 export async function getActorVideos(actorUrl: string, page = 1): Promise<{ items: VideoStub[]; hasMore: boolean }> {
   const cached = getCachedActor(actorUrl);
 
@@ -82,11 +72,9 @@ export async function getActorVideos(actorUrl: string, page = 1): Promise<{ item
     return { items: cached.videos, hasMore: false };
   }
 
-  // Not cached: resolve term ID, return requested page from WP API directly
   const termId = await resolveTermId(actorUrl);
   if (termId === null) return { items: [], hasMore: false };
 
-  // Cold-fill: first time seeing this actor, fetch and cache in background
   if (page === 1) {
     void coldFillActor(actorUrl, termId);
   }
@@ -100,7 +88,6 @@ export async function getActorVideos(actorUrl: string, page = 1): Promise<{ item
     const data = await res.json();
     return provider.parseChannelResponse(data);
   } catch {
-    // WP REST API returns 400 for pages beyond the last — stop pagination gracefully
     return { items: [], hasMore: false };
   }
 }

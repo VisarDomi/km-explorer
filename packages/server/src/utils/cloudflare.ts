@@ -16,7 +16,6 @@ export function isCloudflareBlock(status: number, serverHeader: string | null): 
 export function getCachedCookies(domain: string): string | null {
   const cached = cookieCache.get(domain);
   if (!cached) return null;
-  // Expire after 30 minutes
   if (Date.now() - cached.obtainedAt > 30 * 60 * 1000) {
     cookieCache.delete(domain);
     return null;
@@ -61,7 +60,6 @@ export async function solveCloudflareCookies(url: string): Promise<string> {
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
-    // Poll for cf_clearance cookie up to 30 seconds
     let cookieHeader: string | null = null;
     const deadline = Date.now() + 30_000;
 
@@ -69,7 +67,6 @@ export async function solveCloudflareCookies(url: string): Promise<string> {
       const cookies = await context.cookies();
       const cfCookie = cookies.find(c => c.name === 'cf_clearance');
       if (cfCookie) {
-        // Collect all cookies for the domain
         const domainCookies = cookies.filter(c =>
           domain.endsWith(c.domain.replace(/^\./, ''))
         );
