@@ -1,44 +1,55 @@
 import { loadProvider, getProvider } from '../services/providerLoader.js';
-import { getCachedDetails, setCachedDetail, getUniqueActorUrls, getCachedActor, setCachedActor } from '../services/database.js';
+import { getCachedDetails, setCachedDetail, getDirtyActorUrls, clearDirtyActors, getCachedActor, setCachedActor } from '../services/database.js';
 import { resolveTermId, fetchAllActorVideos } from '../services/actorCache.js';
 import { proxyFetch } from '../utils/proxyFetch.js';
 import { USER_AGENT } from '../config.js';
 import type { VideoStub } from '@km-explorer/provider-types';
 
 const DETAIL_DELAY_MS = 500;
-const ACTOR_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 async function backfillVideoDetails() {
   const provider = getProvider();
 
-  // Phase 1: Collect all video URLs from Typesense
+  // Phase 1: Collect all video URLs from Typesense (parallel batches, localhost)
   console.log('[backfill] Phase 1: Fetching all video stubs from Typesense...');
   const allStubs: VideoStub[] = [];
   const seen = new Set<string>();
+  const CONCURRENCY = 50;
   let page = 1;
+  let exhausted = false;
 
-  while (true) {
-    const req = provider.latestRequest(page);
-    const r = await proxyFetch(req.url, {
-      method: req.method ?? 'GET',
-      headers: { 'User-Agent': USER_AGENT, 'Content-Type': 'text/plain', ...req.headers },
-      body: req.body,
-    });
-    const contentType = r.headers.get('content-type') || '';
-    const data = contentType.includes('json') ? await r.json() : await r.text();
-    const result = provider.parseLatestResponse(data);
+  while (!exhausted) {
+    const pages = Array.from({ length: CONCURRENCY }, (_, i) => page + i);
+    const results = await Promise.all(
+      pages.map(async (p) => {
+        const req = provider.latestRequest(p);
+        const r = await proxyFetch(req.url, {
+          method: req.method ?? 'GET',
+          headers: { 'User-Agent': USER_AGENT, 'Content-Type': 'text/plain', ...req.headers },
+          body: req.body,
+        });
+        const contentType = r.headers.get('content-type') || '';
+        const data = contentType.includes('json') ? await r.json() : await r.text();
+        return { page: p, ...provider.parseLatestResponse(data) };
+      }),
+    );
 
-    for (const stub of result.items) {
-      if (!seen.has(stub.id)) {
-        seen.add(stub.id);
-        allStubs.push(stub);
+    // Process in page order to maintain deterministic dedup
+    for (const result of results.sort((a, b) => a.page - b.page)) {
+      for (const stub of result.items) {
+        if (!seen.has(stub.id)) {
+          seen.add(stub.id);
+          allStubs.push(stub);
+        }
+      }
+      if (!result.hasMore) {
+        exhausted = true;
+        break;
       }
     }
-
-    if (!result.hasMore) break;
-    page++;
+    page += CONCURRENCY;
   }
-  console.log(`[backfill] Collected ${allStubs.length} stubs across ${page} pages`);
+  console.log(`[backfill] Collected ${allStubs.length} stubs`);
 
   // Phase 2: Filter to uncached URLs only
   const allUrls = allStubs.map(s => s.pageUrl);
@@ -52,6 +63,7 @@ async function backfillVideoDetails() {
   }
 
   // Phase 3: Scrape details for uncached URLs
+  // setCachedDetail marks each video's actors as dirty (single transaction).
   console.log('[backfill] Scraping uncached video details...');
   let done = 0;
   let errors = 0;
@@ -84,22 +96,27 @@ async function backfillVideoDetails() {
 }
 
 async function backfillActorCache() {
-  const actorUrls = getUniqueActorUrls();
-  const uncached = actorUrls.filter(url => {
-    const existing = getCachedActor(url);
-    return !existing || (Date.now() - existing.cachedAt) >= ACTOR_CACHE_MAX_AGE_MS;
-  });
-  console.log(`[backfill] Actor cache: ${uncached.length} to fetch, ${actorUrls.length - uncached.length} fresh`);
+  // Only refresh actors that were marked dirty by setCachedDetail.
+  // Dirty set is populated by video detail scraping (both backfill and live scrapeQueue).
+  const dirtyUrls = getDirtyActorUrls();
 
-  if (uncached.length === 0) {
-    console.log('[backfill] All actors cached.');
+  // Also pick up actors that have never been cached at all
+  const uncachedNew = dirtyUrls.filter(url => !getCachedActor(url));
+  const dirtyExisting = dirtyUrls.filter(url => getCachedActor(url));
+  const total = dirtyUrls.length;
+
+  console.log(`[backfill] Actor cache: ${total} dirty (${uncachedNew.length} new, ${dirtyExisting.length} existing to refresh)`);
+
+  if (total === 0) {
+    console.log('[backfill] No dirty actors — nothing to do.');
     return;
   }
 
   let done = 0;
   let errors = 0;
+  const completed: string[] = [];
 
-  for (const actorUrl of uncached) {
+  for (const actorUrl of dirtyUrls) {
     try {
       const termId = await resolveTermId(actorUrl);
       if (termId === null) {
@@ -108,6 +125,7 @@ async function backfillActorCache() {
       } else {
         const videos = await fetchAllActorVideos(termId);
         setCachedActor(actorUrl, termId, videos);
+        completed.push(actorUrl);
       }
     } catch (e) {
       errors++;
@@ -116,10 +134,14 @@ async function backfillActorCache() {
 
     done++;
     if (done % 10 === 0) {
-      console.log(`[backfill] Actor progress: ${done}/${uncached.length} (${errors} errors)`);
+      console.log(`[backfill] Actor progress: ${done}/${total} (${errors} errors)`);
+      // Clear in batches so progress survives crashes
+      clearDirtyActors(completed.splice(0));
     }
   }
 
+  // Clear remaining
+  clearDirtyActors(completed);
   console.log(`[backfill] Actor cache done: ${done} processed, ${errors} errors`);
 }
 

@@ -24,6 +24,12 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS dirty_actors (
+    actor_url TEXT PRIMARY KEY
+  )
+`);
+
 // Migration: strip WP size suffixes from cached thumbnail URLs → use originals
 {
   const rows = db.prepare("SELECT actor_url, videos FROM actor_cache").all() as { actor_url: string; videos: string }[];
@@ -46,7 +52,9 @@ const upsert = db.prepare('INSERT OR REPLACE INTO video_details (video_url, vide
 
 const getActor = db.prepare('SELECT term_id, videos, cached_at FROM actor_cache WHERE actor_url = ?');
 const upsertActor = db.prepare('INSERT OR REPLACE INTO actor_cache (actor_url, term_id, videos, cached_at) VALUES (?, ?, ?, ?)');
-const getUniqueActorUrlsStmt = db.prepare("SELECT DISTINCT json_extract(je.value, '$.url') as url FROM video_details, json_each(video_details.actors) as je");
+const markDirty = db.prepare('INSERT OR IGNORE INTO dirty_actors (actor_url) VALUES (?)');
+const getDirtyActors = db.prepare('SELECT actor_url FROM dirty_actors');
+const clearDirty = db.prepare('DELETE FROM dirty_actors WHERE actor_url IN (SELECT value FROM json_each(?))');
 
 export interface CachedDetail {
   videoSrc: string;
@@ -69,8 +77,15 @@ export function getCachedDetails(urls: string[]): Map<string, CachedDetail> {
   return map;
 }
 
-export function setCachedDetail(videoUrl: string, videoSrc: string, actors: { name: string; url: string }[]): void {
+const setCachedDetailTx = db.transaction((videoUrl: string, videoSrc: string, actors: { name: string; url: string }[]) => {
   upsert.run(videoUrl, videoSrc, JSON.stringify(actors), Date.now());
+  for (const actor of actors) {
+    markDirty.run(actor.url);
+  }
+});
+
+export function setCachedDetail(videoUrl: string, videoSrc: string, actors: { name: string; url: string }[]): void {
+  setCachedDetailTx(videoUrl, videoSrc, actors);
 }
 
 // --- Actor cache ---
@@ -91,7 +106,17 @@ export function setCachedActor(actorUrl: string, termId: number, videos: import(
   upsertActor.run(actorUrl, termId, JSON.stringify(videos), Date.now());
 }
 
-export function getUniqueActorUrls(): string[] {
-  const rows = getUniqueActorUrlsStmt.all() as { url: string }[];
-  return rows.map(r => r.url);
+// --- Dirty actor tracking ---
+// Ownership: only setCachedDetail writes to dirty_actors (via transaction).
+// Only the backfill script reads and clears dirty_actors.
+
+export function getDirtyActorUrls(): string[] {
+  const rows = getDirtyActors.all() as { actor_url: string }[];
+  return rows.map(r => r.actor_url);
 }
+
+export function clearDirtyActors(urls: string[]): void {
+  if (urls.length === 0) return;
+  clearDirty.run(JSON.stringify(urls));
+}
+

@@ -68,13 +68,17 @@ export async function fetchAllActorVideos(termId: number): Promise<VideoStub[]> 
   return allItems;
 }
 
-/** Get actor videos: return from cache (+ background refresh) or fall back to WP API page-by-page. */
+/**
+ * Get actor videos: serve from cache, or cold-fill on first encounter.
+ *
+ * Ownership: this function is a reader. It never refreshes existing cache entries.
+ * Cache invalidation is owned by the dirty_actors table, consumed by the backfill script.
+ * The only write path here is the initial cold-fill for actors never seen before.
+ */
 export async function getActorVideos(actorUrl: string, page = 1): Promise<{ items: VideoStub[]; hasMore: boolean }> {
   const cached = getCachedActor(actorUrl);
 
   if (cached) {
-    // Fire-and-forget background refresh
-    void refreshActor(actorUrl, cached.termId);
     return { items: cached.videos, hasMore: false };
   }
 
@@ -82,9 +86,9 @@ export async function getActorVideos(actorUrl: string, page = 1): Promise<{ item
   const termId = await resolveTermId(actorUrl);
   if (termId === null) return { items: [], hasMore: false };
 
-  // On first page request, kick off background full-fetch
+  // Cold-fill: first time seeing this actor, fetch and cache in background
   if (page === 1) {
-    void backgroundFetchAndCache(actorUrl, termId);
+    void coldFillActor(actorUrl, termId);
   }
 
   try {
@@ -101,21 +105,12 @@ export async function getActorVideos(actorUrl: string, page = 1): Promise<{ item
   }
 }
 
-async function refreshActor(actorUrl: string, termId: number): Promise<void> {
+async function coldFillActor(actorUrl: string, termId: number): Promise<void> {
   try {
     const videos = await fetchAllActorVideos(termId);
     setCachedActor(actorUrl, termId, videos);
+    console.log(`[actorCache] Cold-filled ${videos.length} videos for ${actorUrl}`);
   } catch (e) {
-    console.error(`[actorCache] Background refresh failed for ${actorUrl}:`, (e as Error).message);
-  }
-}
-
-async function backgroundFetchAndCache(actorUrl: string, termId: number): Promise<void> {
-  try {
-    const videos = await fetchAllActorVideos(termId);
-    setCachedActor(actorUrl, termId, videos);
-    console.log(`[actorCache] Cached ${videos.length} videos for ${actorUrl}`);
-  } catch (e) {
-    console.error(`[actorCache] Background fetch failed for ${actorUrl}:`, (e as Error).message);
+    console.error(`[actorCache] Cold-fill failed for ${actorUrl}:`, (e as Error).message);
   }
 }
