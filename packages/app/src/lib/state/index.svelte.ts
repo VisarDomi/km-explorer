@@ -428,7 +428,30 @@ class AppState {
         if (view === 'list') {
             await this.searchState.search(this.searchState.currentQuery);
         } else if (view === 'channel' && this.channel.activeChannel) {
-            await this.channel.openChannel(this.channel.activeChannel);
+            const fg = this.nav.foreground;
+            const scrollTarget = fg.mode === 'channel' ? fg.scrollTarget : null;
+            const page = this.channel.currentPage;
+
+            // Refresh channel data up to the page the user was on
+            if (page > 1) {
+                const token = this.channel.writeGate.acquire('refresh-restore');
+                await this.channel.restoreToPage(page, token.signal);
+                if (!token.cancelled) this.channel.writeGate.release(token);
+            } else {
+                await this.channel.openChannel(this.channel.activeChannel);
+            }
+
+            // Paginate further if scroll target is beyond current page
+            if (scrollTarget) {
+                if (!this.channel.videos.some(v => v.id === scrollTarget)) {
+                    const token = this.channel.writeGate.acquire('refresh-paginate');
+                    await this.channel.paginateToTarget(scrollTarget, token.signal);
+                    if (!token.cancelled) this.channel.writeGate.release(token);
+                }
+                await this.waitForLayout('view-channel', '.channel-content');
+                const scrolled = this.scrollToTarget(scrollTarget, '#view-channel');
+                if (!scrolled) this.showScrollToast(scrollTarget, '#view-channel');
+            }
         }
         // favorites: local data, no refresh needed
     }
