@@ -48,6 +48,8 @@ export async function solveCloudflareCookies(url: string): Promise<string> {
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-gpu-compositing',
         '--window-size=1920,1080',
       ],
     });
