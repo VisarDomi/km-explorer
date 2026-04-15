@@ -7,5 +7,20 @@
     "packages/extensions",
     "packages/server",
     "packages/app"
-  ]
+  ],
+  "scripts": {
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:frontend": "npm run build -w @km-explorer/app",
+    "build:backend": "npm run build -w @km-explorer/extensions && npm run build -w @km-explorer/server",
+    "start": "npm run start:all",
+    "start:all": "npm run build && systemctl --user start km-explorer-backend.service",
+    "restart": "npm run restart:all",
+    "restart:all": "npm run build && systemctl --user restart km-explorer-backend.service",
+    "stop": "npm run stop:all",
+    "stop:all": "systemctl --user stop km-explorer-backend.service",
+    "logs": "npm run logs:all",
+    "logs:all": "journalctl --user -u km-explorer-backend.service -f",
+    "status": "npm run status:all",
+    "status:all": "systemctl --user status km-explorer-backend.service --no-pager"
+  }
 }

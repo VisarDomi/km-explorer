@@ -4,7 +4,8 @@ import { existsSync } from 'node:fs';
 import type { VideoProvider } from '@km-explorer/provider-types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const BUNDLE_PATH = join(__dirname, '..', '..', '..', 'extensions', 'dist', 'bundles', 'ytb.js');
+const BUNDLE_PATH = process.env.KM_PROVIDER_BUNDLE_PATH
+  || join(__dirname, '..', '..', '..', 'extensions', 'dist', 'bundles', 'ytb.js');
 
 let _provider: VideoProvider | null = null;
 

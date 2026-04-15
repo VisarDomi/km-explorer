@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/server.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
     "restart": "systemctl --user restart km-explorer-backend",
     "stop": "systemctl --user stop km-explorer-backend",
     "logs": "journalctl --user -u km-explorer-backend -f",

@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { USER_AGENT } from '../config';
+import { USER_AGENT } from '../config.js';
 
 interface CachedCookies {
   cookieHeader: string;

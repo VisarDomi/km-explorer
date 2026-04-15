@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { Response } from 'express';
-import { CACHE_MAX_AGE, USER_AGENT } from '../config';
-import { proxyFetch } from '../utils/proxyFetch';
+import { CACHE_MAX_AGE, USER_AGENT } from '../config.js';
+import { proxyFetch } from '../utils/proxyFetch.js';
 
 export function isAllowedImageDomain(_hostname: string): boolean {
   return true;

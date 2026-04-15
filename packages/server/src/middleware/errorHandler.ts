@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { UpstreamError } from '../utils/proxyFetch';
+import { UpstreamError } from '../utils/proxyFetch.js';
 
 type AsyncRequestHandler = (req: Request, res: Response, next: NextFunction) => Promise<void>;
 

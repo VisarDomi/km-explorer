@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { asyncHandler } from '../middleware/errorHandler';
-import { proxyFetch, CloudflareError } from '../utils/proxyFetch';
-import { USER_AGENT } from '../config';
+import { asyncHandler } from '../middleware/errorHandler.js';
+import { proxyFetch, CloudflareError } from '../utils/proxyFetch.js';
+import { USER_AGENT } from '../config.js';
 
 const router = Router();
 
