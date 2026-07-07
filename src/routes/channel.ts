@@ -39,24 +39,6 @@ async function renderPage(page: number): Promise<void> {
 export async function init(actorUrl: string): Promise<void> {
     startInit();
 
-    const header = document.createElement('div');
-    header.id = 'ke-header';
-
-    const backBtn = document.createElement('button');
-    backBtn.className = 'ke-favs-btn';
-    backBtn.textContent = '\u2190';
-    backBtn.style.color = '#4af626';
-    backBtn.addEventListener('click', () => { history.back(); });
-
-    const actorName = decodeURIComponent(actorUrl.replace(/^\/actor\//, '').replace(/\/$/, '').replace(/-/g, ' '));
-    const title = document.createElement('span');
-    title.style.cssText = 'flex:1;font-size:18px;font-weight:600;color:#fff;margin:0 8px;text-transform:capitalize';
-    title.textContent = actorName;
-
-    header.appendChild(backBtn);
-    header.appendChild(title);
-    document.body.appendChild(header);
-
     const grid = getGrid();
     grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 
