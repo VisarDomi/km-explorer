@@ -1,10 +1,10 @@
 {
   "name": "km-explorer",
-  "version": "1",
+  "version": "2",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build"
+    "build": "node increase.js && vite build"
   },
   "devDependencies": {
     "@types/tampermonkey": "^5.0.4",

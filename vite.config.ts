@@ -1,3 +1,5 @@
+import pkg from "./package.json";
+
 import { defineConfig, type Plugin } from "vite";
 import monkey from "vite-plugin-monkey";
 
@@ -35,7 +37,7 @@ export default defineConfig({
         monkey({
             entry: "src/main.ts",
             userscript: {
-                name: "km-explorer",
+                name: `${pkg.name} v${pkg.version}`,
                 match: MATCH_URLS,
                 "run-at": "document-start",
             },
