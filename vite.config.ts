@@ -1,44 +1,23 @@
-import pkg from "./package.json";
-
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vite";
 import monkey from "vite-plugin-monkey";
-
-const MATCH_URLS = [
-    "https://ytboob.com/*",
-    "https://www.ytboob.com/*",
-];
-
-function finalBundlePlugin(): Plugin {
-    return {
-        name: "userscript-injector-plugin",
-        renderChunk(code: string) {
-            const injectorWrapper = `
-    'use strict';
-    async function main() {
-${code}
-    }
-    const script = document.createElement("script");
-    script.id = 'km-explorer-injected';
-    script.textContent = '(' + main.toString() + ')();';
-    document.documentElement.appendChild(script);
-`;
-            return { code: injectorWrapper, map: null };
-        },
-    };
-}
+import pkg from "./package.json";
 
 export default defineConfig({
     build: {
         minify: false,
         sourcemap: false,
+        target: "esnext",
+        modulePreload: false,
+        cssCodeSplit: false,
     },
     plugins: [
-        finalBundlePlugin(),
         monkey({
             entry: "src/main.ts",
             userscript: {
                 name: `${pkg.name} v${pkg.version}`,
-                match: MATCH_URLS,
+                namespace: "https://github.com/VisarDomi",
+                description: "video takeover",
+                match: ["https://ytboob.com/*"],
                 "run-at": "document-start",
             },
         }),

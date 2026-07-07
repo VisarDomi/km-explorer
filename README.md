@@ -1,6 +1,6 @@
 # What
 
-A repo that makes opening links to KMPlayer easier.
+A repo that replaces UI and uses our own UI to make opening links to KMPlayer easier.
 
 # Why
 
