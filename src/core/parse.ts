@@ -1,0 +1,116 @@
+import type { VideoStub, VideoDetail, Actor, PagedResult } from "./types.js";
+
+const PER_PAGE = 12;
+
+function originalThumbnailUrl(url: string): string {
+  if (!url) return url;
+  return url.replace(/-\d+x\d+(\.\w+)$/, "$1");
+}
+
+// --- Typesense JSON response parsing ---
+
+interface TsDocument {
+  permalink?: string;
+  post_title?: string;
+  post_thumbnail?: string;
+  post_id?: string;
+}
+
+interface TsHit {
+  document: TsDocument;
+}
+
+interface TsResult {
+  results?: Array<{
+    found?: number;
+    hits?: TsHit[];
+  }>;
+}
+
+export function parseTypesenseResponse(data: unknown): PagedResult<VideoStub> {
+  const ts = data as TsResult;
+  const result = ts.results?.[0];
+  if (!result) return { items: [], hasMore: false };
+
+  const hits = result.hits ?? [];
+  const items: VideoStub[] = hits.map(hit => {
+    const doc = hit.document;
+    return {
+      id: doc.post_id ?? "",
+      title: doc.post_title ?? "",
+      thumbnail: originalThumbnailUrl(doc.post_thumbnail ?? ""),
+      pageUrl: doc.permalink ?? "",
+    };
+  });
+
+  const found = result.found ?? 0;
+  const hasMore = hits.length >= PER_PAGE && items.length < found;
+  return { items, hasMore };
+}
+
+// --- Video detail HTML parsing ---
+
+export function parseVideoDetailHtml(html: string): VideoDetail {
+  let videoSrc = "";
+  const contentUrlMatch = html.match(/<meta[^>]+itemprop=["']contentURL["'][^>]+content=["']([^"']+)["']/i);
+  if (contentUrlMatch) {
+    videoSrc = contentUrlMatch[1];
+  } else {
+    const vidHostMatch = html.match(/https?:\/\/vidhost\.me\/videos\/[^"'\s#]+/);
+    if (vidHostMatch) videoSrc = vidHostMatch[0];
+  }
+
+  const actors: Actor[] = [];
+  const actorRegex = /<a[^>]+href=["']((?:https?:\/\/[^"']*)?\/actor\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = actorRegex.exec(html)) !== null) {
+    const url = match[1].replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
+    const name = match[2].replace(/<[^>]+>/g, "").trim();
+    if (name && !actors.some(a => a.url === url)) {
+      actors.push({ name, url });
+    }
+  }
+
+  return { videoSrc, actors };
+}
+
+// --- WordPress REST API posts response parsing ---
+
+interface WpPost {
+  id: number;
+  title?: { rendered?: string };
+  link?: string;
+  _embedded?: {
+    "wp:featuredmedia"?: Array<{
+      media_details?: {
+        sizes?: Record<string, { source_url?: string }>;
+      };
+      source_url?: string;
+    }>;
+  };
+}
+
+export function parseWpPostsResponse(data: unknown, perPage: number): PagedResult<VideoStub> {
+  const posts = data as WpPost[];
+  if (!Array.isArray(posts)) return { items: [], hasMore: false };
+
+  const items: VideoStub[] = posts.map(post => {
+    const media = post._embedded?.["wp:featuredmedia"]?.[0];
+    const sizes = media?.media_details?.sizes;
+    const thumbnail = originalThumbnailUrl(
+      sizes?.medium?.source_url ?? sizes?.thumbnail?.source_url ?? media?.source_url ?? ""
+    );
+
+    return {
+      id: String(post.id),
+      title: post.title?.rendered?.replace(/&#\d+;/g, m => {
+        const code = parseInt(m.slice(2, -1));
+        return String.fromCharCode(code);
+      }) ?? "",
+      thumbnail,
+      pageUrl: post.link ?? "",
+    };
+  });
+
+  return { items, hasMore: posts.length >= perPage };
+}
