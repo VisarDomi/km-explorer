@@ -16,9 +16,6 @@ async function renderAll(): Promise<void> {
         grid.appendChild(createVideoCard(v, async () => {
             const detail = await scrapeVideoDetail(v.pageUrl);
             await putDetail(v.pageUrl, detail);
-            if (detail.videoSrc) {
-                navigator.clipboard.writeText(detail.videoSrc).catch(() => {});
-            }
         }));
     }
 }

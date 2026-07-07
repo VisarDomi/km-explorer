@@ -1,7 +1,7 @@
-import { getAllVideos, putVideos } from '../storage/db';
-import { fetchTypesenseBatch, BATCH, scrapeVideoDetail } from '../provider/ytb';
+import { getAllVideos, putVideos, getDetail } from '../storage/db';
+import { fetchTypesenseBatch, BATCH } from '../provider/ytb';
 import { startInit, getGrid } from '../ui/shell';
-import { createVideoCard, prefetchDetails } from '../ui/video-card';
+import { createVideoCard } from '../ui/video-card';
 import type { VideoStub } from '../types';
 
 const CLIENT_SIZE = BATCH * 12;
@@ -118,11 +118,8 @@ async function renderPage(page: number, scrollToIndex?: number): Promise<void> {
         if (!v) return;
         const card = createVideoCard(v, () => {
             void (async () => {
-                const detail = await scrapeVideoDetail(v.pageUrl);
-                if (detail.videoSrc) {
-                    navigator.clipboard.writeText(detail.videoSrc).catch(() => {});
-                }
-                if (detail.actors.length > 0) {
+                const detail = await getDetail(v.pageUrl);
+                if (detail?.actors.length) {
                     window.location.href = detail.actors[0].url;
                 }
             })();
@@ -137,8 +134,6 @@ async function renderPage(page: number, scrollToIndex?: number): Promise<void> {
         const card = document.getElementById(`ke-${scrollToIndex}`);
         if (card) card.scrollIntoView();
     }
-
-    void prefetchDetails(slice.filter(Boolean));
 }
 
 export async function init(sitePage: number): Promise<void> {

@@ -5,9 +5,37 @@ import { scrapeVideoDetail } from '../provider/ytb';
 
 type CardClickHandler = (video: VideoStub) => void;
 
+// --- Background prefetch worker ---
+
+const pending: Array<{ pageUrl: string; onReady: () => void }> = [];
+let workerRunning = false;
+
+async function runWorker(): Promise<void> {
+    workerRunning = true;
+    while (pending.length > 0) {
+        const item = pending.shift()!;
+        try {
+            const detail = await scrapeVideoDetail(item.pageUrl);
+            await putDetail(item.pageUrl, detail);
+        } catch (e) {
+            console.error('[prefetch] scrape failed for', item.pageUrl, e);
+        }
+        item.onReady();
+    }
+    workerRunning = false;
+}
+
+function enqueue(pageUrl: string, onReady: () => void): void {
+    pending.push({ pageUrl, onReady });
+    if (!workerRunning) void runWorker();
+}
+
+// --- Card factory ---
+
 export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HTMLElement {
     const card = document.createElement('div');
     card.className = 'ke-card';
+    card.style.opacity = '0.4';
     card.setAttribute('data-video-id', video.id);
 
     const img = document.createElement('img');
@@ -16,21 +44,18 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
     img.loading = 'lazy';
     card.appendChild(img);
 
-    // Loading spinner overlay
     const spinner = document.createElement('div');
     spinner.className = 'ke-spinner-overlay';
     spinner.innerHTML = '<div class="ke-spinner"></div>';
     spinner.style.display = 'none';
     card.appendChild(spinner);
 
-    // Copied overlay
     const copied = document.createElement('div');
     copied.className = 'ke-copied-overlay';
     copied.textContent = 'Copied';
     copied.style.display = 'none';
     card.appendChild(copied);
 
-    // Fav toggle button
     const favBtn = document.createElement('button');
     favBtn.className = 'ke-fav-toggle';
     favBtn.textContent = '\u2661';
@@ -46,45 +71,46 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
     });
     card.appendChild(favBtn);
 
-    // Click handler with state machine: idle → activating → copied
+    let ready = false;
     let busy = false;
-    card.addEventListener('click', async () => {
-        if (busy) return;
+
+    function markReady(): void {
+        ready = true;
+        card.style.opacity = '1';
+    }
+
+    function markActivating(): void {
         busy = true;
         spinner.style.display = 'flex';
+    }
 
-        try {
-            const cached = await getDetail(video.pageUrl);
-            if (!cached) {
-                const detail = await scrapeVideoDetail(video.pageUrl);
-                await putDetail(video.pageUrl, detail);
-            }
-        } catch { /* scroll prefetch coverage, data will be there */ }
-
+    function markCopied(): void {
         spinner.style.display = 'none';
         copied.style.display = 'flex';
         setTimeout(() => { copied.style.display = 'none'; busy = false; }, 1200);
+    }
 
+    card.onclick = async () => {
+        if (!ready || busy) return;
+        markActivating();
+
+        const detail = await getDetail(video.pageUrl);
+        if (detail?.videoSrc) {
+            await navigator.clipboard.writeText(detail.videoSrc);
+        }
+
+        markCopied();
         onClick(video);
+    };
+
+    // Self-register: check cache → ready or enqueue
+    void getDetail(video.pageUrl).then(detail => {
+        if (detail) {
+            markReady();
+        } else {
+            enqueue(video.pageUrl, markReady);
+        }
     });
 
     return card;
-}
-
-export async function prefetchDetails(videos: VideoStub[]): Promise<void> {
-    const toScrape: VideoStub[] = [];
-    for (const v of videos) {
-        const cached = await getDetail(v.pageUrl);
-        if (!cached) toScrape.push(v);
-    }
-    if (toScrape.length === 0) return;
-
-    for (const v of toScrape) {
-        try {
-            const detail = await scrapeVideoDetail(v.pageUrl);
-            await putDetail(v.pageUrl, detail);
-        } catch (e) {
-            console.error('[prefetch] scrape failed for', v.pageUrl, e);
-        }
-    }
 }
