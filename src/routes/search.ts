@@ -24,11 +24,13 @@ function absoluteIndex(sitePage: number, clientPage: number): number {
 
 const LS_KEY = 'ke-scroll';
 function saveScroll(): void {
-    localStorage.setItem(LS_KEY + location.pathname, String(window.scrollY));
+    try { localStorage.setItem(LS_KEY + location.pathname, String(window.scrollY)); } catch { /* corrupt */ }
 }
 function loadScroll(): number | null {
-    const v = localStorage.getItem(LS_KEY + location.pathname);
-    return v !== null ? parseInt(v, 10) : null;
+    try {
+        const v = localStorage.getItem(LS_KEY + location.pathname);
+        return v !== null ? parseInt(v, 10) : null;
+    } catch { return null; }
 }
 
 async function fetchBatch(page: number): Promise<VideoStub[]> {
