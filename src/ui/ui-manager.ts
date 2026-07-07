@@ -60,6 +60,7 @@ export class UIManager {
     // toast
     this.toast = document.createElement("div");
     this.toast.className = "km-toast";
+    this.toast.id = "km-toast";
     document.body.appendChild(this.toast);
 
     // views

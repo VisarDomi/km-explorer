@@ -138,6 +138,7 @@ export class AppController {
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.className = "km-actor-dropdown";
+      overlay.id = "km-actor-dropdown";
       overlay.style.cssText = "position:fixed;bottom:0;left:0;right:0;background:#1a1a1aee;backdrop-filter:blur(4px);display:flex;flex-wrap:wrap;gap:6px;padding:12px;border-top:1px solid #333;z-index:100000;";
 
       for (const actor of actors) {
