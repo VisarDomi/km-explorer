@@ -1,6 +1,6 @@
 {
   "name": "km-explorer",
-  "version": "64",
+  "version": "67",
   "private": true,
   "type": "module",
   "scripts": {

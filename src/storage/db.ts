@@ -1,7 +1,7 @@
 import type { VideoStub, VideoDetail } from '../types';
 
 const DB_NAME = 'km-explorer';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const VIDEO_STORE = 'videos';
 const DETAIL_STORE = 'details';
 const FAV_STORE = 'favorites';
@@ -12,26 +12,12 @@ function openDB(): Promise<IDBDatabase> {
     req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(VIDEO_STORE)) db.createObjectStore(VIDEO_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains(DETAIL_STORE)) db.createObjectStore(DETAIL_STORE, { keyPath: 'video_url' });
+        if (!db.objectStoreNames.contains(DETAIL_STORE)) db.createObjectStore(DETAIL_STORE, { keyPath: 'pageUrl' });
         if (!db.objectStoreNames.contains(FAV_STORE)) db.createObjectStore(FAV_STORE, { keyPath: 'id' });
         if (!db.objectStoreNames.contains('channels')) db.createObjectStore('channels', { keyPath: 'actorUrl' });
-        // v3: migrate video_src → videoSrc
-        if ((req as any).oldVersion < 3 && db.objectStoreNames.contains(DETAIL_STORE)) {
-            const tx = (req as any).transaction(DETAIL_STORE, 'readwrite') as IDBTransaction;
-            const store = tx.objectStore(DETAIL_STORE);
-            store.openCursor().onsuccess = (e: Event) => {
-                const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
-                if (cursor) {
-                    const row = cursor.value;
-                    if ('video_src' in row && !('videoSrc' in row)) {
-                        row.videoSrc = row.video_src;
-                        delete row.video_src;
-                        cursor.update(row);
-                    }
-                    cursor.continue();
-                }
-            };
-        }
+        // v4: nuke old details store (video_src → videoSrc mismatch)
+        if (db.objectStoreNames.contains(DETAIL_STORE)) db.deleteObjectStore(DETAIL_STORE);
+        db.createObjectStore(DETAIL_STORE, { keyPath: 'pageUrl' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -90,7 +76,7 @@ export async function getDetail(pageUrl: string): Promise<VideoDetail | null> {
     const db = await openDB();
     const { promise, resolve, reject } = Promise.withResolvers<VideoDetail | null>();
     const req = db.transaction(DETAIL_STORE, 'readonly').objectStore(DETAIL_STORE).get(pageUrl);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => resolve(req.result ?? null);
     req.onerror = () => reject(req.error!);
     return promise;
 }
@@ -99,7 +85,7 @@ export async function putDetail(pageUrl: string, detail: VideoDetail): Promise<v
     const db = await openDB();
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     const tx = db.transaction(DETAIL_STORE, 'readwrite');
-    tx.objectStore(DETAIL_STORE).put({ video_url: pageUrl, videoSrc: detail.videoSrc, actors: detail.actors });
+    tx.objectStore(DETAIL_STORE).put({ pageUrl, videoSrc: detail.videoSrc, actors: detail.actors });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error!);
     return promise;
