@@ -50,17 +50,16 @@ async function fetchTypesensePage(page: number): Promise<TypesensePage> {
         body: tsSearchBody(page),
     });
     const data = await r.json() as TsResult;
-    const result = data.results?.[0];
-    if (!result) return { items: [], found: 0, hasMore: false };
+    const result = data.results![0]!;
 
-    const hits = result.hits ?? [];
+    const hits = result.hits!;
     const items: VideoStub[] = hits.map(hit => ({
-        id: hit.document.post_id ?? '',
-        thumbnail: stripSize(hit.document.post_thumbnail ?? ''),
-        pageUrl: hit.document.permalink ?? '',
+        id: hit.document.post_id!,
+        thumbnail: stripSize(hit.document.post_thumbnail!),
+        pageUrl: hit.document.permalink!,
     }));
 
-    const found = result.found ?? 0;
+    const found = result.found!;
     const hasMore = hits.length >= PER_PAGE && items.length < found;
     return { items, found, hasMore };
 }
@@ -90,11 +89,11 @@ export async function lookupByIds(ids: string[]): Promise<VideoStub[]> {
         body,
     });
     const data = await r.json() as TsResult;
-    const hits = data.results?.[0]?.hits ?? [];
+    const hits = data.results![0]!.hits!;
     return hits.map(hit => ({
-        id: hit.document.post_id ?? '',
-        thumbnail: stripSize(hit.document.post_thumbnail ?? ''),
-        pageUrl: hit.document.permalink ?? '',
+        id: hit.document.post_id!,
+        thumbnail: stripSize(hit.document.post_thumbnail!),
+        pageUrl: hit.document.permalink!,
     }));
 }
 
@@ -103,7 +102,7 @@ export async function scrapeVideoDetail(pageUrl: string): Promise<VideoDetail> {
     const r = await fetch(url);
     const html = await r.text();
 
-    let videoSrc = '';
+    let videoSrc: string | null = null;
     const metaMatch = html.match(/<meta[^>]+itemprop=["']contentURL["'][^>]+content=["']([^"']+)["']/i);
     if (metaMatch) {
         videoSrc = metaMatch[1];
@@ -111,6 +110,7 @@ export async function scrapeVideoDetail(pageUrl: string): Promise<VideoDetail> {
         const fallback = html.match(/https?:\/\/vidhost\.me\/videos\/[^"'\s#]+/);
         if (fallback) videoSrc = fallback[0];
     }
+    if (!videoSrc) throw new Error(`No videoSrc found on ${pageUrl}`);
 
     const actors: { name: string; url: string }[] = [];
     const actorRegex = /<a[^>]+href=["']((?:https?:\/\/[^"']*)?\/actor\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -136,9 +136,7 @@ export async function resolveTermId(actorUrl: string): Promise<string | null> {
 
 export async function fetchChannelVideos(termId: string, page: number): Promise<{ ids: string[]; pageUrls: string[]; hasMore: boolean }> {
     const r = await fetch(`${BASE_URL}/wp-json/wp/v2/posts?actors=${termId}&per_page=12&page=${page}`);
-    if (!r.ok) return { ids: [], pageUrls: [], hasMore: false };
     const posts = await r.json() as Array<{ id: number; link: string }>;
-    if (!Array.isArray(posts)) return { ids: [], pageUrls: [], hasMore: false };
     return {
         ids: posts.map(p => String(p.id)),
         pageUrls: posts.map(p => p.link),

@@ -12,7 +12,6 @@ async function renderAll(): Promise<void> {
     grid.innerHTML = '';
 
     for (const v of _videos) {
-        if (!v) continue;
         grid.appendChild(createVideoCard(v, () => {}));
     }
 }
@@ -81,7 +80,7 @@ function buildImportSection(): void {
                 }
             }
         }
-        _videos = _ids.map(id => map.get(id)!).filter(Boolean);
+        _videos = _ids.map(id => map.get(id)!);
         void renderAll();
         mergeBtn.disabled = false;
         mergeBtn.textContent = 'Merge';
@@ -117,7 +116,7 @@ export async function init(): Promise<void> {
                 }
             }
         }
-        _videos = _ids.map(id => map.get(id)!).filter(Boolean);
+        _videos = _ids.map(id => map.get(id)!);
         void renderAll();
     }
 

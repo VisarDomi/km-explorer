@@ -36,13 +36,11 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
 
     const img = document.createElement('img');
     img.src = video.thumbnail;
-    img.alt = '';
     img.loading = 'lazy';
     card.appendChild(img);
 
     const srcText = document.createElement('span');
     srcText.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:2px 4px;background:rgba(0,0,0,0.7);color:#4af626;font:9px monospace;word-break:break-all;z-index:2;line-height:1.2';
-    srcText.textContent = '';
     card.appendChild(srcText);
 
     const spinner = document.createElement('div');

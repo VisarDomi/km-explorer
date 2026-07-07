@@ -90,7 +90,7 @@ export async function getDetail(pageUrl: string): Promise<VideoDetail | null> {
     const db = await openDB();
     const { promise, resolve, reject } = Promise.withResolvers<VideoDetail | null>();
     const req = db.transaction(DETAIL_STORE, 'readonly').objectStore(DETAIL_STORE).get(pageUrl);
-    req.onsuccess = () => resolve(req.result ?? null);
+    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error!);
     return promise;
 }
@@ -181,7 +181,7 @@ export async function getCachedChannel(actorUrl: string): Promise<{ termId: stri
     const db = await openDB();
     const { promise, resolve, reject } = Promise.withResolvers<{ termId: string; videoIds: string[] } | null>();
     const req = db.transaction('channels', 'readonly').objectStore('channels').get(actorUrl);
-    req.onsuccess = () => resolve(req.result ?? null);
+    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error!);
     return promise;
 }

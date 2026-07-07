@@ -14,7 +14,7 @@ export async function init(actorUrl: string): Promise<void> {
 
     if (cached) {
         const map = await getVideosByIds(cached.videoIds);
-        allVideos = cached.videoIds.map(id => map.get(id)!).filter(Boolean);
+        allVideos = cached.videoIds.map(id => map.get(id)!);
         if (allVideos.length > 0) {
             renderAll(allVideos);
             return;
@@ -56,7 +56,7 @@ export async function init(actorUrl: string): Promise<void> {
         }
     }
 
-    allVideos = allIds.map(id => map.get(id)!).filter(Boolean);
+    allVideos = allIds.map(id => map.get(id)!);
     renderAll(allVideos);
 }
 
