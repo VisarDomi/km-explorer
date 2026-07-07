@@ -31,7 +31,7 @@ body {
     color: #aaa;
     border: 1px solid #333;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 16px;
     cursor: pointer;
 }
 
@@ -71,6 +71,42 @@ body {
     height: 100%;
     object-fit: cover;
     display: block;
+}
+
+.ke-spinner-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+}
+
+.ke-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: #4af626;
+    border-radius: 50%;
+    animation: ke-spin 0.8s linear infinite;
+}
+
+@keyframes ke-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ke-copied-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: #4af626;
+    font-size: 16px;
+    font-weight: 600;
+    z-index: 3;
 }
 
 .ke-fav-toggle {
@@ -127,7 +163,7 @@ body {
     border: 1px solid #555;
     border-radius: 4px;
     padding: 4px 12px;
-    font-size: 13px;
+    font-size: 16px;
     cursor: pointer;
 }
 
@@ -139,7 +175,7 @@ body {
 
 .ke-import-status {
     color: #aaa;
-    font-size: 12px;
+    font-size: 16px;
 }
 
 .ke-empty {
@@ -155,5 +191,5 @@ body {
     text-align: center;
     color: #666;
     padding: 20px;
-    font-size: 14px;
+    font-size: 16px;
 }

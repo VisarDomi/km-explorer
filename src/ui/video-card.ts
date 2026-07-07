@@ -16,6 +16,20 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
     img.loading = 'lazy';
     card.appendChild(img);
 
+    // Loading spinner overlay
+    const spinner = document.createElement('div');
+    spinner.className = 'ke-spinner-overlay';
+    spinner.innerHTML = '<div class="ke-spinner"></div>';
+    spinner.style.display = 'none';
+    card.appendChild(spinner);
+
+    // Copied overlay
+    const copied = document.createElement('div');
+    copied.className = 'ke-copied-overlay';
+    copied.textContent = 'Copied';
+    copied.style.display = 'none';
+    card.appendChild(copied);
+
     // Fav toggle button
     const favBtn = document.createElement('button');
     favBtn.className = 'ke-fav-toggle';
@@ -26,21 +40,31 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
         favBtn.textContent = nowFav ? '\u2764' : '\u2661';
         favBtn.classList.toggle('active', nowFav);
     });
-    // Set initial state
     void isFav(video.id).then(fav => {
         favBtn.textContent = fav ? '\u2764' : '\u2661';
         favBtn.classList.toggle('active', fav);
     });
     card.appendChild(favBtn);
 
-    // Click handler
+    // Click handler with state machine: idle → activating → copied
+    let busy = false;
     card.addEventListener('click', async () => {
-        // Ensure detail is cached before click action
-        const cached = await getDetail(video.pageUrl);
-        if (!cached) {
-            const detail = await scrapeVideoDetail(video.pageUrl);
-            await putDetail(video.pageUrl, detail);
-        }
+        if (busy) return;
+        busy = true;
+        spinner.style.display = 'flex';
+
+        try {
+            const cached = await getDetail(video.pageUrl);
+            if (!cached) {
+                const detail = await scrapeVideoDetail(video.pageUrl);
+                await putDetail(video.pageUrl, detail);
+            }
+        } catch { /* scroll prefetch coverage, data will be there */ }
+
+        spinner.style.display = 'none';
+        copied.style.display = 'flex';
+        setTimeout(() => { copied.style.display = 'none'; busy = false; }, 1200);
+
         onClick(video);
     });
 
@@ -55,7 +79,6 @@ export async function prefetchDetails(videos: VideoStub[]): Promise<void> {
     }
     if (toScrape.length === 0) return;
 
-    // Scrape sequentially with delay to avoid hammering
     for (const v of toScrape) {
         try {
             const detail = await scrapeVideoDetail(v.pageUrl);

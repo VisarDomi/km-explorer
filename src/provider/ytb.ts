@@ -138,44 +138,14 @@ export async function resolveTermId(actorUrl: string): Promise<string | null> {
     return String(data[0].id);
 }
 
-export async function fetchChannelVideos(termId: string, page: number): Promise<{ items: VideoStub[]; hasMore: boolean }> {
-    const r = await fetch(`${BASE_URL}/wp-json/wp/v2/posts?actors=${termId}&per_page=12&page=${page}&_embed`);
-    if (!r.ok) return { items: [], hasMore: false };
-    const data = await r.json();
-    return parseWpPostsResponse(data, 12);
-}
-
-interface WpPost {
-    id: number;
-    link?: string;
-    _embedded?: {
-        'wp:featuredmedia'?: Array<{
-            media_details?: {
-                sizes?: Record<string, { source_url?: string }>;
-            };
-            source_url?: string;
-        }>;
+export async function fetchChannelVideos(termId: string, page: number): Promise<{ ids: string[]; pageUrls: string[]; hasMore: boolean }> {
+    const r = await fetch(`${BASE_URL}/wp-json/wp/v2/posts?actors=${termId}&per_page=12&page=${page}`);
+    if (!r.ok) return { ids: [], pageUrls: [], hasMore: false };
+    const posts = await r.json() as Array<{ id: number; link: string }>;
+    if (!Array.isArray(posts)) return { ids: [], pageUrls: [], hasMore: false };
+    return {
+        ids: posts.map(p => String(p.id)),
+        pageUrls: posts.map(p => p.link),
+        hasMore: posts.length >= 12,
     };
-}
-
-function stripSizeSuffix(url: string): string {
-    return url.replace(/-\d+x\d+(\.\w+)$/, '$1');
-}
-
-function parseWpPostsResponse(data: unknown, perPage: number): { items: VideoStub[]; hasMore: boolean } {
-    const posts = data as WpPost[];
-    if (!Array.isArray(posts)) return { items: [], hasMore: false };
-
-    const items: VideoStub[] = posts.map(post => {
-        const media = post._embedded?.['wp:featuredmedia']?.[0];
-        const sizes = media?.media_details?.sizes;
-        const thumb = stripSizeSuffix(sizes?.medium?.source_url ?? sizes?.thumbnail?.source_url ?? media?.source_url ?? '');
-        return {
-            id: String(post.id),
-            thumbnail: thumb,
-            pageUrl: post.link ?? '',
-        };
-    });
-
-    return { items, hasMore: posts.length >= perPage };
 }

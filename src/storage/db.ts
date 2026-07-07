@@ -1,7 +1,7 @@
 import type { VideoStub, VideoDetail } from '../types';
 
 const DB_NAME = 'km-explorer';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const VIDEO_STORE = 'videos';
 const DETAIL_STORE = 'details';
 const FAV_STORE = 'favorites';
@@ -14,6 +14,7 @@ function openDB(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains(VIDEO_STORE)) db.createObjectStore(VIDEO_STORE, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(DETAIL_STORE)) db.createObjectStore(DETAIL_STORE, { keyPath: 'video_url' });
         if (!db.objectStoreNames.contains(FAV_STORE)) db.createObjectStore(FAV_STORE, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('channels')) db.createObjectStore('channels', { keyPath: 'actorUrl' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -182,5 +183,26 @@ export async function mergeFavs(ids: string[]): Promise<number> {
         resolve(added);
     };
     tx.onerror = () => resolve(added);
+    return promise;
+}
+
+// --- Channels ---
+
+export async function getCachedChannel(actorUrl: string): Promise<{ termId: string; videoIds: string[] } | null> {
+    const db = await openDB();
+    const { promise, resolve } = Promise.withResolvers<{ termId: string; videoIds: string[] } | null>();
+    const req = db.transaction('channels', 'readonly').objectStore('channels').get(actorUrl);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => resolve(null);
+    return promise;
+}
+
+export async function setCachedChannel(actorUrl: string, termId: string, videoIds: string[]): Promise<void> {
+    const db = await openDB();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const tx = db.transaction('channels', 'readwrite');
+    tx.objectStore('channels').put({ actorUrl, termId, videoIds });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
     return promise;
 }
