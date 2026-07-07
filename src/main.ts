@@ -1,8 +1,8 @@
-import { preparePageEnvironment, startDOMSanitizer } from "./core/environment.js";
 import { AppController } from "./core/app-controller.js";
 
-const { setInterval } = preparePageEnvironment();
-startDOMSanitizer(setInterval);
+document.open();
+document.close();
+document.title = "KM Explorer";
 
 const app = new AppController();
 await app.init();
