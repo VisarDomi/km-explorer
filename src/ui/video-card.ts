@@ -7,25 +7,21 @@ type CardClickHandler = (video: VideoStub) => void;
 
 // --- Background prefetch worker ---
 
-const pending: Array<{ pageUrl: string; onReady: () => void }> = [];
+const pending: Array<{ pageUrl: string; onReady: (videoSrc: string) => void }> = [];
 let workerRunning = false;
 
 async function runWorker(): Promise<void> {
     workerRunning = true;
     while (pending.length > 0) {
         const item = pending.shift()!;
-        try {
-            const detail = await scrapeVideoDetail(item.pageUrl);
-            await putDetail(item.pageUrl, detail);
-        } catch (e) {
-            console.error('[prefetch] scrape failed for', item.pageUrl, e);
-        }
-        item.onReady();
+        const detail = await scrapeVideoDetail(item.pageUrl);
+        await putDetail(item.pageUrl, detail);
+        item.onReady(detail.videoSrc);
     }
     workerRunning = false;
 }
 
-function enqueue(pageUrl: string, onReady: () => void): void {
+function enqueue(pageUrl: string, onReady: (videoSrc: string) => void): void {
     pending.push({ pageUrl, onReady });
     if (!workerRunning) void runWorker();
 }
@@ -43,6 +39,11 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
     img.alt = '';
     img.loading = 'lazy';
     card.appendChild(img);
+
+    const srcText = document.createElement('span');
+    srcText.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:2px 4px;background:rgba(0,0,0,0.7);color:#4af626;font:9px monospace;word-break:break-all;z-index:2;line-height:1.2';
+    srcText.textContent = '';
+    card.appendChild(srcText);
 
     const spinner = document.createElement('div');
     spinner.className = 'ke-spinner-overlay';
@@ -74,9 +75,11 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
     let ready = false;
     let busy = false;
 
-    function markReady(): void {
+    function markReady(videoSrc: string): void {
         ready = true;
+        card.setAttribute('data-video-src', videoSrc);
         card.style.opacity = '1';
+        srcText.textContent = videoSrc;
     }
 
     function markActivating(): void {
@@ -90,23 +93,23 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
         setTimeout(() => { copied.style.display = 'none'; busy = false; }, 1200);
     }
 
-    card.onclick = async () => {
+    card.addEventListener('click', async () => {
         if (!ready || busy) return;
         markActivating();
 
-        const detail = await getDetail(video.pageUrl);
-        if (detail?.videoSrc) {
-            await navigator.clipboard.writeText(detail.videoSrc);
+        const src = card.getAttribute('data-video-src');
+        if (src) {
+            await navigator.clipboard.writeText(src);
         }
 
         markCopied();
         onClick(video);
-    };
+    });
 
     // Self-register: check cache → ready or enqueue
     void getDetail(video.pageUrl).then(detail => {
         if (detail) {
-            markReady();
+            markReady(detail.videoSrc);
         } else {
             enqueue(video.pageUrl, markReady);
         }

@@ -1,5 +1,5 @@
-import { resolveTermId, fetchChannelVideos, scrapeVideoDetail } from '../provider/ytb';
-import { putDetail, getVideosByIds, putVideos, getCachedChannel, setCachedChannel } from '../storage/db';
+import { resolveTermId, fetchChannelVideos } from '../provider/ytb';
+import { getVideosByIds, putVideos, getCachedChannel, setCachedChannel } from '../storage/db';
 import { lookupByIds } from '../provider/ytb';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
@@ -65,9 +65,6 @@ function renderAll(videos: VideoStub[]): void {
     grid.innerHTML = '';
 
     for (const v of videos) {
-        grid.appendChild(createVideoCard(v, async () => {
-            const detail = await scrapeVideoDetail(v.pageUrl);
-            await putDetail(v.pageUrl, detail);
-        }));
+        grid.appendChild(createVideoCard(v, () => {}));
     }
 }

@@ -1,5 +1,5 @@
-import { preloadFavs, mergeFavs, getVideosByIds, putVideos, putDetail } from '../storage/db';
-import { lookupByIds, scrapeVideoDetail } from '../provider/ytb';
+import { preloadFavs, mergeFavs, getVideosByIds, putVideos } from '../storage/db';
+import { lookupByIds } from '../provider/ytb';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
 import type { VideoStub } from '../types';
@@ -13,10 +13,7 @@ async function renderAll(): Promise<void> {
 
     for (const v of _videos) {
         if (!v) continue;
-        grid.appendChild(createVideoCard(v, async () => {
-            const detail = await scrapeVideoDetail(v.pageUrl);
-            await putDetail(v.pageUrl, detail);
-        }));
+        grid.appendChild(createVideoCard(v, () => {}));
     }
 }
 
@@ -67,33 +64,27 @@ function buildImportSection(): void {
         if (ids.length === 0) { status.textContent = 'No IDs found'; status.style.display = 'inline'; return; }
         mergeBtn.disabled = true;
         mergeBtn.textContent = 'Merging...';
-        try {
-            const added = await mergeFavs(ids);
-            status.textContent = `Added ${added} of ${ids.length} IDs${ids.length - added > 0 ? ` (${ids.length - added} already existed)` : ''}`;
-            status.style.display = 'inline';
-            _ids = await preloadFavs();
-            const map = await getVideosByIds(_ids);
-            const missing = _ids.filter(id => !map.has(id));
-            if (missing.length > 0) {
-                const chunks: string[][] = [];
-                for (let i = 0; i < missing.length; i += 100) chunks.push(missing.slice(i, i + 100));
-                for (const chunk of chunks) {
-                    const fetched = await lookupByIds(chunk);
-                    if (fetched.length > 0) {
-                        await putVideos(fetched);
-                        for (const v of fetched) map.set(v.id, v);
-                    }
+        const added = await mergeFavs(ids);
+        status.textContent = `Added ${added} of ${ids.length} IDs${ids.length - added > 0 ? ` (${ids.length - added} already existed)` : ''}`;
+        status.style.display = 'inline';
+        _ids = await preloadFavs();
+        const map = await getVideosByIds(_ids);
+        const missing = _ids.filter(id => !map.has(id));
+        if (missing.length > 0) {
+            const chunks: string[][] = [];
+            for (let i = 0; i < missing.length; i += 100) chunks.push(missing.slice(i, i + 100));
+            for (const chunk of chunks) {
+                const fetched = await lookupByIds(chunk);
+                if (fetched.length > 0) {
+                    await putVideos(fetched);
+                    for (const v of fetched) map.set(v.id, v);
                 }
             }
-            _videos = _ids.map(id => map.get(id)!).filter(Boolean);
-            void renderAll();
-        } catch (e) {
-            status.textContent = 'Error: ' + (e as Error).message;
-            status.style.display = 'inline';
-        } finally {
-            mergeBtn.disabled = false;
-            mergeBtn.textContent = 'Merge';
         }
+        _videos = _ids.map(id => map.get(id)!).filter(Boolean);
+        void renderAll();
+        mergeBtn.disabled = false;
+        mergeBtn.textContent = 'Merge';
     };
 
     wrap.appendChild(homeBtn);

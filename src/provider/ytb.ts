@@ -2,8 +2,9 @@ import type { VideoStub, VideoDetail } from '../types';
 
 const TS_API = 'https://ts-api.ytboob.com/multi_search?x-typesense-api-key=2mFxuIpLuESx5X1aPGkDOx4ZAtM5jG46';
 const BASE_URL = 'https://ytboob.com';
-const PER_PAGE = 12;
 export const BATCH = 50;
+
+const PER_PAGE = 12;
 
 function tsSearchBody(page: number, perPage = PER_PAGE): string {
     return JSON.stringify({
@@ -36,13 +37,13 @@ interface TsResult {
     }>;
 }
 
-export interface TypesensePage {
+interface TypesensePage {
     items: VideoStub[];
     found: number;
     hasMore: boolean;
 }
 
-export async function fetchTypesensePage(page: number): Promise<TypesensePage> {
+async function fetchTypesensePage(page: number): Promise<TypesensePage> {
     const r = await fetch(TS_API, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
@@ -66,12 +67,7 @@ export async function fetchTypesensePage(page: number): Promise<TypesensePage> {
 
 export async function fetchTypesenseBatch(startPage: number): Promise<TypesensePage[]> {
     const pages = Array.from({ length: BATCH }, (_, i) => startPage + i);
-    const results = await Promise.all(
-        pages.map(p => fetchTypesensePage(p).catch(e => {
-            console.error('[ytb] fetchTypesensePage failed for page', p, e);
-            return { items: [], found: 0, hasMore: false } as TypesensePage;
-        })),
-    );
+    const results = await Promise.all(pages.map(p => fetchTypesensePage(p)));
     return results;
 }
 
