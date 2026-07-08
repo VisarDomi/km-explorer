@@ -1,4 +1,4 @@
-import { init as initHome } from './routes/home';
+import { init as initFavs } from './routes/favs';
 import { init as initSearch } from './routes/search';
 import { init as initChannel } from './routes/channel';
 
@@ -12,7 +12,7 @@ async function main(): Promise<void> {
     }
 
     if (pathname.startsWith('/favs')) {
-        void initHome();
+        void initFavs();
         return;
     }
 
