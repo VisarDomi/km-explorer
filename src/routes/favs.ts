@@ -1,29 +1,20 @@
-import { preloadFavs, mergeFavs, getVideosByIds, putVideos, getDetail } from '../storage/db';
-import { lookupByIds } from '../provider/ytb';
+import { preloadFavs, mergeFavs } from '../storage/db';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
 import type { VideoStub } from '../types';
+import {getVideos, onVideoClick} from "../core/videos";
 
-let _ids: string[] = [];
-let _videos: VideoStub[] = [];
-
-async function renderAll(): Promise<void> {
+async function renderAll(videos: VideoStub[]): Promise<void> {
     const grid = getGrid();
     grid.innerHTML = '';
 
-    for (const v of _videos) {
-        grid.appendChild(createVideoCard(v, () => {
-            void (async () => {
-                const detail = await getDetail(v.pageUrl);
-                if (detail?.actors.length) {
-                    window.location.href = detail.actors[0].url;
-                }
-            })();
-        }));
+    for (const v of videos) {
+        const videoCard = createVideoCard(v, onVideoClick)
+        grid.appendChild(videoCard);
     }
 }
 
-function buildImportSection(): void {
+function buildImportSection(ids: string[]): void {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'text-align:center;margin:16px 0';
 
@@ -60,35 +51,22 @@ function buildImportSection(): void {
 
     btn.onclick = showImport;
     exportBtn.onclick = () => {
-        textarea.value = _ids.join('\n');
+        textarea.value = ids.join('\n');
         showImport();
     };
 
     mergeBtn.onclick = async () => {
         const raw = textarea.value;
-        const ids = [...raw.matchAll(/\d+/g)].map(m => m[0]).filter(Boolean);
+        const ids = [...raw.matchAll(/\d+/g)].map(m => m[0]);
         if (ids.length === 0) { status.textContent = 'No IDs found'; status.style.display = 'inline'; return; }
         mergeBtn.disabled = true;
         mergeBtn.textContent = 'Merging...';
         const added = await mergeFavs(ids);
         status.textContent = `Added ${added} of ${ids.length} IDs${ids.length - added > 0 ? ` (${ids.length - added} already existed)` : ''}`;
         status.style.display = 'inline';
-        _ids = await preloadFavs();
-        const map = await getVideosByIds(_ids);
-        const missing = _ids.filter(id => !map.has(id));
-        if (missing.length > 0) {
-            const chunks: string[][] = [];
-            for (let i = 0; i < missing.length; i += 100) chunks.push(missing.slice(i, i + 100));
-            for (const chunk of chunks) {
-                const fetched = await lookupByIds(chunk);
-                if (fetched.length > 0) {
-                    await putVideos(fetched);
-                    for (const v of fetched) map.set(v.id, v);
-                }
-            }
-        }
-        _videos = _ids.map(id => map.get(id)!);
-        void renderAll();
+        const newIds = await preloadFavs();
+        const newVideos = await getVideos(newIds);
+        void renderAll(newVideos);
         mergeBtn.disabled = false;
         mergeBtn.textContent = 'Merge';
     };
@@ -105,27 +83,9 @@ function buildImportSection(): void {
 export async function init(): Promise<void> {
     startInit();
 
-    _ids = await preloadFavs();
+    const ids = await preloadFavs();
+    const videos = await getVideos(ids);
+    void renderAll(videos);
 
-    if (_ids.length === 0) {
-        getGrid().innerHTML = '<div class="ke-empty">No favorites yet</div>';
-    } else {
-        const map = await getVideosByIds(_ids);
-        const missing = _ids.filter(id => !map.has(id));
-        if (missing.length > 0) {
-            const chunks: string[][] = [];
-            for (let i = 0; i < missing.length; i += 100) chunks.push(missing.slice(i, i + 100));
-            for (const chunk of chunks) {
-                const fetched = await lookupByIds(chunk);
-                if (fetched.length > 0) {
-                    await putVideos(fetched);
-                    for (const v of fetched) map.set(v.id, v);
-                }
-            }
-        }
-        _videos = _ids.map(id => map.get(id)!);
-        void renderAll();
-    }
-
-    buildImportSection();
+    buildImportSection(ids);
 }

@@ -1,8 +1,9 @@
-import { getAllVideos, putVideos, getDetail } from '../storage/db';
+import { getAllVideos, putVideos } from '../storage/db';
 import { fetchTypesenseBatch, BATCH } from '../provider/ytb';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
 import type { VideoStub } from '../types';
+import {onVideoClick} from "../core/videos";
 
 const CLIENT_SIZE = BATCH * 12;
 const SITE_SIZE = 30;
@@ -74,6 +75,7 @@ function buildPagination(page: number, grid: HTMLElement): void {
     favsLink.className = 'ke-page-favs';
     favsLink.style.cssText = 'color:#f87171;text-decoration:none;font-size:13px;font-weight:600;padding:0 6px;align-self:center';
 
+    // how is my request to have (the same) pagination on top and bottom turn into this mess!
     const top = document.createElement('div');
     top.className = 'ke-pagination';
     top.appendChild(favsLink.cloneNode(true));
@@ -116,14 +118,7 @@ async function renderPage(page: number, scrollToIndex?: number): Promise<void> {
     grid.innerHTML = '';
     slice.forEach((v, i) => {
         if (!v) return;
-        const card = createVideoCard(v, () => {
-            void (async () => {
-                const detail = await getDetail(v.pageUrl);
-                if (detail?.actors.length) {
-                    window.location.href = detail.actors[0].url;
-                }
-            })();
-        });
+        const card = createVideoCard(v, onVideoClick);
         card.id = `ke-${start + i}`;
         grid.appendChild(card);
     });

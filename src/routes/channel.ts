@@ -1,24 +1,20 @@
 import { resolveTermId, fetchChannelVideos } from '../provider/ytb';
-import { getVideosByIds, putVideos, getCachedChannel, setCachedChannel } from '../storage/db';
-import { lookupByIds } from '../provider/ytb';
+import { getVideosByIds, getCachedChannel, setCachedChannel } from '../storage/db';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
 import type { VideoStub } from '../types';
+import {getVideos} from "../core/videos";
 
 export async function init(actorUrl: string): Promise<void> {
     startInit();
 
     // Check cache first
     const cached = await getCachedChannel(actorUrl);
-    let allVideos: VideoStub[] = [];
-
     if (cached) {
         const map = await getVideosByIds(cached.videoIds);
-        allVideos = cached.videoIds.map(id => map.get(id)!);
-        if (allVideos.length > 0) {
-            renderAll(allVideos);
-            return;
-        }
+        const videos = cached.videoIds.map(id => map.get(id)!);
+        renderAll(videos);
+        return
     }
 
     const grid = getGrid();
@@ -31,33 +27,19 @@ export async function init(actorUrl: string): Promise<void> {
     }
 
     // Fetch all pages
-    const allIds: string[] = [];
+    const ids: string[] = [];
     let pg = 1;
     while (true) {
         const result = await fetchChannelVideos(termId, pg);
-        allIds.push(...result.ids);
+        ids.push(...result.ids);
         if (!result.hasMore) break;
         pg++;
     }
 
-    await setCachedChannel(actorUrl, termId, allIds);
+    await setCachedChannel(actorUrl, termId, ids);
 
-    const map = await getVideosByIds(allIds);
-    const missing = allIds.filter(id => !map.has(id));
-    if (missing.length > 0) {
-        const chunks: string[][] = [];
-        for (let i = 0; i < missing.length; i += 100) chunks.push(missing.slice(i, i + 100));
-        for (const chunk of chunks) {
-            const fetched = await lookupByIds(chunk);
-            if (fetched.length > 0) {
-                await putVideos(fetched);
-                for (const v of fetched) map.set(v.id, v);
-            }
-        }
-    }
-
-    allVideos = allIds.map(id => map.get(id)!);
-    renderAll(allVideos);
+    const videos = await getVideos(ids);
+    renderAll(videos);
 }
 
 function renderAll(videos: VideoStub[]): void {

@@ -71,7 +71,6 @@ export async function fetchTypesenseBatch(startPage: number): Promise<TypesenseP
 }
 
 export async function lookupByIds(ids: string[]): Promise<VideoStub[]> {
-    if (ids.length === 0) return [];
     const body = JSON.stringify({
         searches: [{
             collection: 'post',

@@ -100,13 +100,16 @@ export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HT
     });
 
     // Self-register: check cache → ready or enqueue
-    void getDetail(video.pageUrl).then(detail => {
-        if (detail) {
-            markReady(detail.videoSrc);
-        } else {
-            enqueue(video.pageUrl, markReady);
-        }
-    });
+    void selfRegister(video, markReady);
 
     return card;
+}
+
+async function selfRegister(video: VideoStub, markReady:(videoSrc: string) => void) {
+    const detail = await getDetail(video.pageUrl)
+    if (detail) {
+        markReady(detail.videoSrc);
+    } else {
+        enqueue(video.pageUrl, markReady);
+    }
 }
