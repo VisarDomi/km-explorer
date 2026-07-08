@@ -1,4 +1,4 @@
-import { preloadFavs, mergeFavs, getVideosByIds, putVideos } from '../storage/db';
+import { preloadFavs, mergeFavs, getVideosByIds, putVideos, getDetail } from '../storage/db';
 import { lookupByIds } from '../provider/ytb';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
@@ -12,7 +12,14 @@ async function renderAll(): Promise<void> {
     grid.innerHTML = '';
 
     for (const v of _videos) {
-        grid.appendChild(createVideoCard(v, () => {}));
+        grid.appendChild(createVideoCard(v, () => {
+            void (async () => {
+                const detail = await getDetail(v.pageUrl);
+                if (detail?.actors.length) {
+                    window.location.href = detail.actors[0].url;
+                }
+            })();
+        }));
     }
 }
 
