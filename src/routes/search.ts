@@ -1,8 +1,8 @@
-import { getAllVideos, putVideos } from '../storage/db';
-import { fetchTypesenseBatch, BATCH } from '../provider/ytb';
-import { startInit, getGrid } from '../ui/shell';
-import { createVideoCard } from '../ui/video-card';
-import type { VideoStub } from '../types';
+import {getAllVideos, putVideos} from '../storage/db';
+import {BATCH, fetchTypesenseBatch} from '../provider/ytb';
+import {getGrid, startInit} from '../ui/shell';
+import {createVideoCard} from '../ui/video-card';
+import type {VideoStub} from '../types';
 import {onVideoClick} from "../core/videos";
 
 const CLIENT_SIZE = BATCH * 12;
@@ -43,8 +43,7 @@ async function fetchBatch(page: number): Promise<VideoStub[]> {
     }
 
     const videos: VideoStub[] = [];
-    const start = (startBatch - 1) * 12;
-    let idx = start;
+    let idx = (startBatch - 1) * 12;
     for (const p of results) {
         for (const v of p.items) {
             videos[idx++] = v;
@@ -66,45 +65,34 @@ async function fetchBatch(page: number): Promise<VideoStub[]> {
     return videos;
 }
 
+function makeBar(page: number): HTMLElement {
+    const bar = document.createElement('div');
+    bar.className = 'ke-pagination';
+
+    const link = document.createElement('a');
+    link.href = '/favs';
+    link.textContent = 'Favs';
+    link.className = 'ke-page-favs';
+    link.style.cssText = 'color:#f87171;text-decoration:none;font-size:13px;font-weight:600;padding:0 6px;align-self:center';
+    bar.appendChild(link);
+
+    for (let i = 1; i <= totalClientPages; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'ke-page-btn';
+        if (i === page) btn.classList.add('active');
+        btn.textContent = String(i);
+        btn.addEventListener('click', () => {
+            window.location.href = clientToSite(i) === 1 ? '/' : `/page/${clientToSite(i)}/`;
+        });
+        bar.appendChild(btn);
+    }
+    return bar;
+}
+
 function buildPagination(page: number, grid: HTMLElement): void {
     document.querySelectorAll('.ke-pagination').forEach(el => el.remove());
-
-    const favsLink = document.createElement('a');
-    favsLink.href = '/favs';
-    favsLink.textContent = 'Favs';
-    favsLink.className = 'ke-page-favs';
-    favsLink.style.cssText = 'color:#f87171;text-decoration:none;font-size:13px;font-weight:600;padding:0 6px;align-self:center';
-
-    // how is my request to have (the same) pagination on top and bottom turn into this mess!
-    const top = document.createElement('div');
-    top.className = 'ke-pagination';
-    top.appendChild(favsLink.cloneNode(true));
-    for (let i = 1; i <= totalClientPages; i++) {
-        const btn = document.createElement('button');
-        btn.className = 'ke-page-btn';
-        if (i === page) btn.classList.add('active');
-        btn.textContent = String(i);
-        btn.addEventListener('click', () => {
-            window.location.href = clientToSite(i) === 1 ? '/' : `/page/${clientToSite(i)}/`;
-        });
-        top.appendChild(btn);
-    }
-    grid.before(top);
-
-    const bottom = document.createElement('div');
-    bottom.className = 'ke-pagination';
-    bottom.appendChild(favsLink);
-    for (let i = 1; i <= totalClientPages; i++) {
-        const btn = document.createElement('button');
-        btn.className = 'ke-page-btn';
-        if (i === page) btn.classList.add('active');
-        btn.textContent = String(i);
-        btn.addEventListener('click', () => {
-            window.location.href = clientToSite(i) === 1 ? '/' : `/page/${clientToSite(i)}/`;
-        });
-        bottom.appendChild(btn);
-    }
-    grid.after(bottom);
+    grid.before(makeBar(page));
+    grid.after(makeBar(page));
 }
 
 async function renderPage(page: number, scrollToIndex?: number): Promise<void> {
@@ -117,7 +105,6 @@ async function renderPage(page: number, scrollToIndex?: number): Promise<void> {
 
     grid.innerHTML = '';
     slice.forEach((v, i) => {
-        if (!v) return;
         const card = createVideoCard(v, onVideoClick);
         card.id = `ke-${start + i}`;
         grid.appendChild(card);
