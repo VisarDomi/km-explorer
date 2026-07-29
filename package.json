@@ -1,14 +1,17 @@
 {
   "name": "km-explorer",
-  "version": "78",
+  "version": "79",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node increase.js && vite build"
+    "build": "node increase.js && vite build",
+    "tests": "node tests/ios/run.mjs",
+    "tests:smoke": "node tests/ios/run.mjs --test smoke"
   },
   "devDependencies": {
     "@types/tampermonkey": "^5.0.4",
     "typescript": "^5.9.3",
+    "userscript-ios-test": "file:../../userscript-ios-test",
     "vite": "^7.1.9",
     "vite-plugin-monkey": "^7.1.4"
   }
