@@ -73,11 +73,13 @@ export function createVideoCard(
     video: VideoStub,
     onClick: CardClickHandler,
     provider: Provider,
+    { disabled = false }: { disabled?: boolean } = {},
 ): HTMLElement {
     const card = document.createElement('div');
     card.className = 'ke-card';
     card.style.opacity = '0.4';
     card.setAttribute('data-video-id', video.id);
+    if (disabled) card.setAttribute('aria-disabled', 'true');
 
     const image = document.createElement('img');
     image.src = video.thumbnail;
@@ -120,7 +122,7 @@ export function createVideoCard(
     };
 
     card.addEventListener('click', async () => {
-        if (!ready || busy) return;
+        if (disabled || !ready || busy) return;
         busy = true;
         spinner.style.display = 'flex';
         const videoSrc = card.getAttribute('data-video-src');

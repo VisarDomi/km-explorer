@@ -164,10 +164,11 @@ function renderActorGrid(
     grid.innerHTML = '';
 
     for (const video of videos) {
+        const selected = sameProviderPage(video.pageUrl, selectedUrl);
         const card = createVideoCard(video, selected => {
             window.location.replace(selected.pageUrl);
-        }, provider);
-        if (sameProviderPage(video.pageUrl, selectedUrl)) {
+        }, provider, { disabled: selected });
+        if (selected) {
             card.classList.add('selected');
         }
         grid.appendChild(card);

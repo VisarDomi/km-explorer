@@ -69,6 +69,7 @@ body {
 .ke-card.selected {
     outline: 3px solid #0055ff;
     outline-offset: -3px;
+    cursor: default;
 }
 
 .ke-card img {
