@@ -1,6 +1,6 @@
 import type { Provider } from '../provider';
 import { fetchActorVideos, getCachedActorVideos } from '../core/actor-videos';
-import { getDetail, isFav, putDetail, toggleFav } from '../storage/db';
+import { getDetail, putDetail } from '../storage/db';
 import { startInit } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
 import type { VideoDetail, VideoStub } from '../types';
@@ -23,7 +23,6 @@ async function loadDetail(provider: Provider, videoUrl: string): Promise<VideoDe
 function createPlayer(videoSrc: string): {
     root: HTMLElement;
     video: HTMLVideoElement;
-    setSelected: (selected: VideoStub) => void;
 } {
     const root = document.createElement('main');
     root.className = 'ke-video-page';
@@ -40,9 +39,29 @@ function createPlayer(videoSrc: string): {
     const controls = document.createElement('div');
     controls.className = 'ke-video-controls';
 
+    const time = document.createElement('div');
+    time.className = 'ke-time-display';
+    time.textContent = '00:00.000 / 00:00.000';
+
+    const progress = document.createElement('div');
+    progress.className = 'ke-progress-bar';
+    progress.setAttribute('role', 'slider');
+    progress.setAttribute('aria-label', 'Video progress');
+    progress.setAttribute('aria-valuemin', '0');
+    progress.setAttribute('aria-valuemax', '0');
+    progress.setAttribute('aria-valuenow', '0');
+
+    const fill = document.createElement('div');
+    fill.className = 'ke-progress-fill';
+    progress.appendChild(fill);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'ke-player-buttons';
+
     const play = document.createElement('button');
-    play.className = 'ke-control-btn';
-    play.textContent = 'Pause';
+    play.className = 'ke-player-btn';
+    play.textContent = '\u23f8\ufe0f';
+    play.setAttribute('aria-label', 'Pause');
     play.addEventListener('click', () => {
         if (video.paused) {
             void video.play();
@@ -51,44 +70,53 @@ function createPlayer(videoSrc: string): {
         }
     });
     video.addEventListener('play', () => {
-        play.textContent = 'Pause';
+        play.textContent = '\u23f8\ufe0f';
+        play.setAttribute('aria-label', 'Pause');
     });
     video.addEventListener('pause', () => {
-        play.textContent = 'Play';
+        play.textContent = '\u25b6\ufe0f';
+        play.setAttribute('aria-label', 'Play');
     });
 
     const mute = document.createElement('button');
-    mute.className = 'ke-control-btn';
-    mute.textContent = 'Unmute';
+    mute.className = 'ke-player-btn';
+    mute.textContent = '\ud83d\udd07';
+    mute.setAttribute('aria-label', 'Unmute');
     mute.addEventListener('click', () => {
         video.muted = !video.muted;
-        mute.textContent = video.muted ? 'Unmute' : 'Mute';
+        mute.textContent = video.muted ? '\ud83d\udd07' : '\ud83d\udd0a';
+        mute.setAttribute('aria-label', video.muted ? 'Unmute' : 'Mute');
     });
 
-    const copy = document.createElement('button');
-    copy.className = 'ke-control-btn';
-    copy.textContent = 'Copy';
-    copy.addEventListener('click', async () => {
-        await navigator.clipboard.writeText(videoSrc);
-        copy.textContent = 'Copied';
-        setTimeout(() => {
-            copy.textContent = 'Copy';
-        }, 1200);
+    const updateTimeline = (): void => {
+        const duration = Number.isFinite(video.duration) && video.duration > 0
+            ? video.duration
+            : 0;
+        const currentTime = Number.isFinite(video.currentTime)
+            ? video.currentTime
+            : 0;
+        const percentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+        time.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
+        fill.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
+        progress.setAttribute('aria-valuemax', String(duration));
+        progress.setAttribute('aria-valuenow', String(currentTime));
+    };
+
+    progress.addEventListener('pointerdown', event => {
+        const duration = video.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        const bounds = progress.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+        video.currentTime = duration * ratio;
     });
+    video.addEventListener('loadedmetadata', updateTimeline);
+    video.addEventListener('durationchange', updateTimeline);
+    video.addEventListener('timeupdate', updateTimeline);
+    video.addEventListener('seeked', updateTimeline);
+    updateTimeline();
 
-    const favorite = document.createElement('button');
-    favorite.className = 'ke-control-btn';
-    favorite.textContent = 'Favorite';
-    favorite.disabled = true;
-
-    const home = document.createElement('button');
-    home.className = 'ke-control-btn';
-    home.textContent = 'Home';
-    home.addEventListener('click', () => {
-        window.location.href = '/';
-    });
-
-    controls.append(play, mute, copy, favorite, home);
+    buttons.append(play, mute);
+    controls.append(time, progress, buttons);
 
     const status = document.createElement('div');
     status.className = 'ke-video-status';
@@ -107,29 +135,29 @@ function createPlayer(videoSrc: string): {
 
     root.append(video, controls, status, heading, grid);
 
-    return {
-        root,
-        video,
-        setSelected: selected => {
-            favorite.disabled = false;
-            void isFav(selected.id).then(active => {
-                favorite.textContent = active ? 'Unfavorite' : 'Favorite';
-                favorite.classList.toggle('active', active);
-            });
-            favorite.onclick = async () => {
-                const active = await toggleFav(selected.id);
-                favorite.textContent = active ? 'Unfavorite' : 'Favorite';
-                favorite.classList.toggle('active', active);
-            };
-        },
-    };
+    return { root, video };
+}
+
+function formatTime(seconds: number): string {
+    if (!Number.isFinite(seconds) || seconds < 0) return '00:00.000';
+    const milliseconds = Math.floor((seconds % 1) * 1000)
+        .toString()
+        .padStart(3, '0');
+    const total = Math.floor(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60)
+        .toString()
+        .padStart(2, '0');
+    const remaining = (total % 60).toString().padStart(2, '0');
+    return hours > 0
+        ? `${hours.toString().padStart(2, '0')}:${minutes}:${remaining}.${milliseconds}`
+        : `${minutes}:${remaining}.${milliseconds}`;
 }
 
 function renderActorGrid(
     videos: VideoStub[],
     selectedUrl: string,
     provider: Provider,
-    setSelected: (selected: VideoStub) => void,
 ): void {
     const grid = document.getElementById('ke-grid');
     if (!grid) return;
@@ -141,7 +169,6 @@ function renderActorGrid(
         }, provider);
         if (sameProviderPage(video.pageUrl, selectedUrl)) {
             card.classList.add('selected');
-            setSelected(video);
         }
         grid.appendChild(card);
     }
@@ -168,9 +195,9 @@ export async function init(provider: Provider, videoUrl: string): Promise<void> 
 
     const cached = await getCachedActorVideos(provider, actor.url);
     if (cached) {
-        renderActorGrid(cached, videoUrl, provider, player.setSelected);
+        renderActorGrid(cached, videoUrl, provider);
     }
 
     const fresh = await fetchActorVideos(provider, actor.url);
-    renderActorGrid(fresh, videoUrl, provider, player.setSelected);
+    renderActorGrid(fresh, videoUrl, provider);
 }
