@@ -13,7 +13,9 @@ interface CacheTask {
 const tasks = new Map<string, CacheTask>();
 const queue: string[] = [];
 const queued = new Set<string>();
-let workerRunning = false;
+let workerGeneration = 0;
+let runningGeneration: number | null = null;
+let restartListenerInstalled = false;
 
 function queueTask(pageUrl: string): void {
     if (queued.has(pageUrl)) return;
@@ -22,8 +24,9 @@ function queueTask(pageUrl: string): void {
 }
 
 async function runWorker(): Promise<void> {
-    if (workerRunning) return;
-    workerRunning = true;
+    const generation = workerGeneration;
+    if (runningGeneration === generation) return;
+    runningGeneration = generation;
     try {
         while (queue.length > 0) {
             const pageUrl = queue.shift()!;
@@ -33,16 +36,18 @@ async function runWorker(): Promise<void> {
 
             try {
                 const cached = await getDetail(pageUrl);
+                if (generation !== workerGeneration) return;
                 const detail = cached ?? await task.provider.fetchVideoDetail(pageUrl);
+                if (generation !== workerGeneration) return;
                 if (!cached) await putDetail(pageUrl, detail);
+                if (generation !== workerGeneration) return;
                 for (const callback of task.callbacks) callback(detail.videoSrc);
-                tasks.delete(pageUrl);
             } catch (error) {
                 console.warn(`Could not cache ${pageUrl}`, error);
             }
         }
     } finally {
-        workerRunning = false;
+        if (runningGeneration === generation) runningGeneration = null;
     }
 }
 
@@ -61,13 +66,20 @@ function enqueue(provider: Provider, pageUrl: string, callback: ReadyCallback): 
 }
 
 export function restartCardCacheWorker(): void {
+    workerGeneration++;
+    queue.length = 0;
+    queued.clear();
     for (const pageUrl of tasks.keys()) queueTask(pageUrl);
     void runWorker();
 }
 
-window.addEventListener('pageshow', event => {
-    if (event.persisted) restartCardCacheWorker();
-});
+function installRestartListener(): void {
+    if (restartListenerInstalled) return;
+    restartListenerInstalled = true;
+    window.addEventListener('pageshow', event => {
+        if (event.persisted) restartCardCacheWorker();
+    });
+}
 
 export function createVideoCard(
     video: VideoStub,
@@ -75,6 +87,8 @@ export function createVideoCard(
     provider: Provider,
     { disabled = false }: { disabled?: boolean } = {},
 ): HTMLElement {
+    installRestartListener();
+
     const card = document.createElement('div');
     card.className = 'ke-card';
     card.style.opacity = '0.4';
@@ -137,13 +151,7 @@ export function createVideoCard(
         }
     });
 
-    void getDetail(video.pageUrl).then(detail => {
-        if (detail) {
-            markReady(detail.videoSrc);
-        } else {
-            enqueue(provider, video.pageUrl, markReady);
-        }
-    });
+    enqueue(provider, video.pageUrl, markReady);
 
     return card;
 }
