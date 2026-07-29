@@ -1,8 +1,10 @@
 Tester prerequisites:
 
-- Run on an iPhone with Safari foregrounded and the km-explorer userscript
-  enabled.
-- The universal userscript-ios-test debugger must be enabled.
+- Run on an iPhone with Safari foregrounded.
+- The universal userscript-ios-test debugger must be enabled and granted access
+  to `ytboob.com`.
+- Disable other installed copies of km-explorer while the suite injects the
+  locally built userscript.
 - The live provider must return enough entries to exercise multiple provider
   and client pages.
 - Tests that change Favorites must snapshot and restore the original Favorites
@@ -15,7 +17,6 @@ Frozen critical behavior:
 - `/` is Favorites and occupies the page-0 position in app navigation.
 - Every favorite is rendered in one grid, newest first.
 - Favorites is not divided into pages.
-- `/favs` is not an application route.
 - Toggling a card's Favorite control immediately updates the Favorites store.
 - Returning to `/` reflects the updated complete Favorites collection.
 
@@ -48,9 +49,9 @@ Frozen critical behavior:
 - Repeated worker starts do not duplicate completed work or change a ready
   card's result.
 - When a Favorites or listing page returns from bfcache, its card worker starts
-  again.
-- The restarted worker preserves completed cards and continues unresolved
-  cards.
+  again from the first card.
+- The restarted worker checks IndexedDB in card order, immediately restores
+  cached cards, and resumes provider fetching at the first missing detail.
 
 5. Opening a video
 - Selecting a ready card copies its media URL during the activating gesture.
@@ -64,7 +65,11 @@ Frozen critical behavior:
 6. Video page
 - The selected video is displayed full width at the top of the page.
 - The video has no native controls.
-- km-explorer controls are displayed directly below the video.
+- The video starts muted.
+- Precise current-time and duration numbers are displayed directly below the
+  video.
+- A seekable progress bar appears below the time display and tracks playback.
+- Icon-only play/pause and mute/unmute controls appear below the progress bar.
 - The page does not automatically scroll after takeover or data loading.
 - Safari attempts to play the selected media.
 - The navigation-time media copy happens regardless of whether Safari
@@ -78,6 +83,8 @@ Frozen critical behavior:
 - No actor selector, actor tabs, or actor-navigation link is required.
 - Actor-video cards use the same readiness and Favorite behavior as other
   video cards.
+- The currently displayed video is highlighted in the actor grid.
+- The highlighted current-video card cannot copy or navigate to itself.
 - The currently displayed video and its actor-video grid are derived from the
   provider video URL and provider data.
 
@@ -124,9 +131,11 @@ https://ytboob.com/
 Client listing page 1 positioned at provider page 2:
 https://ytboob.com/page/2/
 
-Video cases begin by selecting a ready card from Favorites or a live listing.
-The selected card's existing provider video URL is used so the test does not
-depend on a permanently frozen video or actor.
+Known Safari-playable video:
+https://ytboob.com/purple-see-through-try-on-haul-4k-017/
 
-Example provider video URL shape:
-https://ytboob.com/sensual-fashion-photoshoot-behind-the-scenes-fashion-nude-with-leather-harness-costume/
+Known Safari-unsupported video:
+https://ytboob.com/great-try-on-haul/
+
+Both known playback cases belong to Zoe Hauls and provide the same actor-video
+grid for replacement-navigation checks.
