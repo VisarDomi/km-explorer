@@ -1,12 +1,14 @@
 # Gold Standard Flow
 
-1. https://ytboob.com/ → listing page 1 (600/page, pagination top+bottom, newest first)
-2. Scroll → scrollend saves position → bfcache restores on back
-3. /page/2/ → listing page 2 (site page 21, client page 1 still)
-4. Click pagination 3 → soft-nav to client page 3 → URL: /page/41/
-5. /favs → favorites (25/page, import/export at bottom, Home button to go back)
-6. Favs: Import/Merge → paste IDs → adds → fetches thumbnails + detail
-7. Card click → copy video src → hard-nav to actor → channel page
-8. Channel: click → copy only → back via bfcache
-9. Refresh → IndexedDB serves cached → background fetch new videos
-10. Fav toggle on any card → adds/removes from favorites store
+1. `/` → all Favorites in one grid → client page 0
+2. `/page/2/` → client listing page 1 → scroll to provider page 2 position
+3. Client pagination → Favorites at 0 → listing pages map to their first provider URLs
+4. Listing scroll → `scrollend` saves position
+5. Ready card click → copy media URL → hard-nav to its existing provider video URL
+6. Video page → full-width control-free video → app controls → single actor's videos
+7. Video attempts playback whether or not Safari can play it; media URL was always copied
+8. Actor-video card click → copy media URL → `location.replace()` its provider video URL
+9. Repeat video replacements → one Back swipe returns to the original Favorites/listing bfcache entry
+10. bfcache restore → DOM, viewport, and ready cards remain → restart idempotent card cache worker
+11. IndexedDB serves cached data → background work fills missing data → Favorite toggles update `/`
+12. Provider interface owns routes, pagination mapping, listing/detail/actor fetching, and media extraction

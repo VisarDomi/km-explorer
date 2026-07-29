@@ -1,0 +1,132 @@
+Tester prerequisites:
+
+- Run on an iPhone with Safari foregrounded and the km-explorer userscript
+  enabled.
+- The universal userscript-ios-test debugger must be enabled.
+- The live provider must return enough entries to exercise multiple provider
+  and client pages.
+- Tests that change Favorites must snapshot and restore the original Favorites
+  store.
+
+Frozen critical behavior:
+
+1. Favorites home
+- Opening `https://ytboob.com/` replaces the provider page with km-explorer.
+- `/` is Favorites and occupies the page-0 position in app navigation.
+- Every favorite is rendered in one grid, newest first.
+- Favorites is not divided into pages.
+- `/favs` is not an application route.
+- Toggling a card's Favorite control immediately updates the Favorites store.
+- Returning to `/` reflects the updated complete Favorites collection.
+
+2. Provider and client pagination
+- `/page/2/` opens client listing page 1.
+- One client listing page contains up to 600 provider videos in provider order.
+- The provider page in the URL determines the initial video position within
+  its client page.
+- Opening another provider URL mapped to the same client page renders the same
+  client-page data and positions the corresponding video.
+- The listing pagination appears above and below the video grid.
+- Favorites appears in the page-0 position before the numbered client pages.
+- Selecting page 0 opens `/`.
+- Selecting a numbered client page opens the first provider URL represented by
+  that client page.
+- The active client page, provider URL, rendered video range, and initial
+  position agree.
+
+3. Listing position
+- On `scrollend` + 100 ms, the current listing position is saved.
+- Selecting a ready card leaves the listing through a real navigation.
+- One Safari Back swipe restores the listing from bfcache.
+- The restored document retains its DOM, active client page, ready-card state,
+  and exact viewport position.
+
+4. Card detail cache
+- Each card resolves the detail data and media URL required to become ready.
+- A card with cached detail data becomes ready without refetching that detail.
+- Background card processing skips cards that are already ready.
+- Repeated worker starts do not duplicate completed work or change a ready
+  card's result.
+- When a Favorites or listing page returns from bfcache, its card worker starts
+  again.
+- The restarted worker preserves completed cards and continues unresolved
+  cards.
+
+5. Opening a video
+- Selecting a ready card copies its media URL during the activating gesture.
+- The card then hard-navigates to that video's existing provider URL.
+- No km-explorer-specific video URL is invented.
+- A provider video URL is recognized and replaced by the km-explorer video
+  page.
+- The original Favorites or listing document remains available to Safari's
+  bfcache.
+
+6. Video page
+- The selected video is displayed full width at the top of the page.
+- The video has no native controls.
+- km-explorer controls are displayed directly below the video.
+- The page does not automatically scroll after takeover or data loading.
+- Safari attempts to play the selected media.
+- The navigation-time media copy happens regardless of whether Safari
+  successfully plays the video.
+- Playback failure does not prevent the rest of the video page from becoming
+  usable.
+
+7. Actor-video grid
+- Every video has exactly one actor for application purposes.
+- The video page renders that actor's video entries below the player controls.
+- No actor selector, actor tabs, or actor-navigation link is required.
+- Actor-video cards use the same readiness and Favorite behavior as other
+  video cards.
+- The currently displayed video and its actor-video grid are derived from the
+  provider video URL and provider data.
+
+8. Video replacement and history
+- Selecting a ready actor-video card copies its media URL during the activating
+  gesture.
+- It opens the selected card's existing provider video URL with
+  `location.replace()`.
+- The replacement page displays the newly selected video and its actor-video
+  grid.
+- Further actor-video selections continue replacing the current video history
+  entry.
+- Video-to-video navigation does not add Back steps.
+- One Safari Back swipe from any replacement video returns directly to the
+  original Favorites or listing page.
+- The originating page is restored from bfcache with its previous viewport and
+  card state.
+- Its idempotent card worker restarts after restoration.
+
+9. IndexedDB behavior
+- Cached video summaries, details, media URLs, actor results, and Favorites are
+  reused when available.
+- Cached data makes the corresponding UI usable before missing background work
+  finishes.
+- Missing data is fetched and stored without duplicating completed card work.
+- Reloading an application route reconstructs the correct UI from cached and
+  newly fetched provider data.
+
+10. Provider boundary
+- Shared routing and UI do not import ytboob-specific operations directly.
+- The active provider recognizes Favorites, listing, video, and actor data
+  routes.
+- The provider owns mapping between provider pages and client pages.
+- The provider owns listing queries, video-detail extraction, actor-video
+  queries, thumbnails, existing provider URLs, and media-source extraction.
+- Shared Favorites, listing, video, card-cache, navigation, and bfcache behavior
+  consume the provider interface.
+
+Entry URLs:
+
+Favorites / client page 0:
+https://ytboob.com/
+
+Client listing page 1 positioned at provider page 2:
+https://ytboob.com/page/2/
+
+Video cases begin by selecting a ready card from Favorites or a live listing.
+The selected card's existing provider video URL is used so the test does not
+depend on a permanently frozen video or actor.
+
+Example provider video URL shape:
+https://ytboob.com/sensual-fashion-photoshoot-behind-the-scenes-fashion-nude-with-leather-harness-costume/
