@@ -47,8 +47,9 @@ export async function putVideos(videos: VideoStub[]): Promise<void> {
 }
 
 export async function getVideosByIds(ids: string[]): Promise<Map<string, VideoStub>> {
-    const db = await openDB();
     const map = new Map<string, VideoStub>();
+    if (ids.length === 0) return map;
+    const db = await openDB();
     const { promise, resolve, reject } = Promise.withResolvers<Map<string, VideoStub>>();
     const tx = db.transaction(VIDEO_STORE, 'readonly');
     const store = tx.objectStore(VIDEO_STORE);
@@ -70,11 +71,11 @@ export async function getVideosByIds(ids: string[]): Promise<Map<string, VideoSt
 
 // --- Details ---
 
-export async function getDetail(pageUrl: string): Promise<VideoDetail> {
+export async function getDetail(pageUrl: string): Promise<VideoDetail | undefined> {
     const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<VideoDetail>();
+    const { promise, resolve, reject } = Promise.withResolvers<VideoDetail | undefined>();
     const req = db.transaction(DETAIL_STORE, 'readonly').objectStore(DETAIL_STORE).get(pageUrl);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => resolve(req.result as VideoDetail | undefined);
     req.onerror = () => reject(req.error!);
     return promise;
 }

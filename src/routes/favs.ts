@@ -1,91 +1,102 @@
-import { preloadFavs, mergeFavs } from '../storage/db';
+import type { Provider } from '../provider';
+import { mergeFavs, preloadFavs } from '../storage/db';
+import { getVideos } from '../core/videos';
 import { startInit, getGrid } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
+import { replacePagination } from '../ui/pagination';
 import type { VideoStub } from '../types';
-import {getVideos, onVideoClick} from "../core/videos";
 
-async function renderAll(videos: VideoStub[]): Promise<void> {
+function render(videos: VideoStub[], provider: Provider): void {
     const grid = getGrid();
     grid.innerHTML = '';
-
-    for (const v of videos) {
-        const videoCard = createVideoCard(v, onVideoClick)
-        grid.appendChild(videoCard);
+    for (const video of videos) {
+        grid.appendChild(createVideoCard(video, selected => {
+            window.location.href = selected.pageUrl;
+        }, provider));
+    }
+    if (videos.length === 0) {
+        grid.innerHTML = '<div class="ke-empty">No favorites yet</div>';
     }
 }
 
-function buildImportSection(ids: string[]): void {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'text-align:center;margin:16px 0';
+function buildImportSection(
+    initialIds: string[],
+    provider: Provider,
+): void {
+    let ids = initialIds;
+    const panel = document.createElement('section');
+    panel.className = 'ke-import-panel';
 
-    const btn = document.createElement('button');
-    btn.textContent = 'Import / Merge';
-    btn.style.cssText = 'background:#333;color:#ccc;border:1px solid #555;border-radius:4px;padding:6px 16px;font:13px monospace;cursor:pointer';
+    const reveal = document.createElement('button');
+    reveal.className = 'ke-io-btn';
+    reveal.textContent = 'Import / Merge';
 
     const textarea = document.createElement('textarea');
+    textarea.className = 'ke-import-textarea';
     textarea.placeholder = 'Paste IDs (space, newline, comma separated)';
-    textarea.style.cssText = 'display:none;width:100%;max-width:500px;min-height:40px;margin:8px auto;padding:8px;background:#111;color:#aaa;border:1px solid #555;border-radius:4px;font:13px monospace;resize:none;overflow:hidden;box-sizing:border-box';
+    textarea.hidden = true;
 
-    const mergeBtn = document.createElement('button');
-    mergeBtn.textContent = 'Merge';
-    mergeBtn.style.cssText = 'display:none;background:#4a4;color:#fff;border:none;border-radius:4px;padding:6px 16px;font:13px monospace;cursor:pointer;margin-left:8px';
+    const actions = document.createElement('div');
+    actions.className = 'ke-import-actions';
 
-    const exportBtn = document.createElement('button');
-    exportBtn.textContent = 'Export';
-    exportBtn.style.cssText = 'background:#333;color:#ccc;border:1px solid #555;border-radius:4px;padding:6px 16px;font:13px monospace;cursor:pointer;margin-left:8px';
+    const merge = document.createElement('button');
+    merge.className = 'ke-io-btn ke-io-merge';
+    merge.textContent = 'Merge';
+    merge.hidden = true;
+
+    const exportButton = document.createElement('button');
+    exportButton.className = 'ke-io-btn';
+    exportButton.textContent = 'Export';
 
     const status = document.createElement('span');
-    status.style.cssText = 'display:none;color:#aaa;font:12px monospace;margin-left:8px';
+    status.className = 'ke-import-status';
 
-    const homeBtn = document.createElement('button');
-    homeBtn.textContent = 'Home';
-    homeBtn.style.cssText = 'background:#333;color:#ccc;border:1px solid #555;border-radius:4px;padding:6px 16px;font:13px monospace;cursor:pointer;margin-right:8px';
-    homeBtn.addEventListener('click', () => { window.location.href = '/page/2/'; });
-
-    const showImport = () => {
-        textarea.style.display = 'block';
-        mergeBtn.style.display = 'inline-block';
-        btn.style.display = 'none';
-        status.style.display = 'none';
+    const showEditor = (): void => {
+        reveal.hidden = true;
+        textarea.hidden = false;
+        merge.hidden = false;
     };
 
-    btn.onclick = showImport;
-    exportBtn.onclick = () => {
+    reveal.addEventListener('click', showEditor);
+    exportButton.addEventListener('click', () => {
         textarea.value = ids.join('\n');
-        showImport();
-    };
+        showEditor();
+    });
+    merge.addEventListener('click', async () => {
+        const imported = [...textarea.value.matchAll(/\d+/g)].map(match => match[0]);
+        if (imported.length === 0) {
+            status.textContent = 'No IDs found';
+            return;
+        }
 
-    mergeBtn.onclick = async () => {
-        const raw = textarea.value;
-        const ids = [...raw.matchAll(/\d+/g)].map(m => m[0]);
-        if (ids.length === 0) { status.textContent = 'No IDs found'; status.style.display = 'inline'; return; }
-        mergeBtn.disabled = true;
-        mergeBtn.textContent = 'Merging...';
-        const added = await mergeFavs(ids);
-        status.textContent = `Added ${added} of ${ids.length} IDs${ids.length - added > 0 ? ` (${ids.length - added} already existed)` : ''}`;
-        status.style.display = 'inline';
-        const newIds = await preloadFavs();
-        const newVideos = await getVideos(newIds);
-        void renderAll(newVideos);
-        mergeBtn.disabled = false;
-        mergeBtn.textContent = 'Merge';
-    };
+        merge.disabled = true;
+        merge.textContent = 'Merging...';
+        const added = await mergeFavs(imported);
+        ids = await preloadFavs();
+        render(await getVideos(ids, provider), provider);
+        status.textContent = `Added ${added} of ${imported.length} IDs`;
+        merge.disabled = false;
+        merge.textContent = 'Merge';
+    });
 
-    wrap.appendChild(homeBtn);
-    wrap.appendChild(btn);
-    wrap.appendChild(textarea);
-    wrap.appendChild(mergeBtn);
-    wrap.appendChild(exportBtn);
-    wrap.appendChild(status);
-    document.body.appendChild(wrap);
+    actions.append(reveal, merge, exportButton, status);
+    panel.append(textarea, actions);
+    document.body.appendChild(panel);
 }
 
-export async function init(): Promise<void> {
+export async function init(provider: Provider): Promise<void> {
     startInit();
+    const grid = getGrid();
+    grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 
     const ids = await preloadFavs();
-    const videos = await getVideos(ids);
-    void renderAll(videos);
+    render(await getVideos(ids, provider), provider);
+    replacePagination(0, 0, provider, grid);
+    buildImportSection(ids, provider);
 
-    buildImportSection(ids);
+    void provider.fetchListingPageCount().then(totalPages => {
+        replacePagination(0, totalPages, provider, grid);
+    }).catch(error => {
+        console.warn('Could not load listing page count', error);
+    });
 }

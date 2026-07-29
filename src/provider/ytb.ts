@@ -1,10 +1,14 @@
 import type { VideoStub, VideoDetail } from '../types';
+import type { Provider, ProviderRoute } from './types';
 
 const TS_API = 'https://ts-api.ytboob.com/multi_search?x-typesense-api-key=2mFxuIpLuESx5X1aPGkDOx4ZAtM5jG46';
 const BASE_URL = 'https://ytboob.com';
 export const BATCH = 50;
 
 const PER_PAGE = 12;
+const SITE_SIZE = 30;
+const CLIENT_SIZE = BATCH * PER_PAGE;
+const PROVIDER_PAGES_PER_CLIENT = CLIENT_SIZE / SITE_SIZE;
 
 function tsSearchBody(page: number, perPage = PER_PAGE): string {
     return JSON.stringify({
@@ -64,13 +68,13 @@ async function fetchTypesensePage(page: number): Promise<TypesensePage> {
     return { items, found, hasMore };
 }
 
-export async function fetchTypesenseBatch(startPage: number): Promise<TypesensePage[]> {
+async function fetchTypesenseBatch(startPage: number): Promise<TypesensePage[]> {
     const pages = Array.from({ length: BATCH }, (_, i) => startPage + i);
     const results = await Promise.all(pages.map(p => fetchTypesensePage(p)));
     return results;
 }
 
-export async function lookupByIds(ids: string[]): Promise<VideoStub[]> {
+async function lookupByIds(ids: string[]): Promise<VideoStub[]> {
     const body = JSON.stringify({
         searches: [{
             collection: 'post',
@@ -96,7 +100,7 @@ export async function lookupByIds(ids: string[]): Promise<VideoStub[]> {
     }));
 }
 
-export async function scrapeVideoDetail(pageUrl: string): Promise<VideoDetail> {
+async function scrapeVideoDetail(pageUrl: string): Promise<VideoDetail> {
     const url = pageUrl.startsWith('http') ? pageUrl : `${BASE_URL}${pageUrl}`;
     const r = await fetch(url);
     const html = await r.text();
@@ -125,7 +129,7 @@ export async function scrapeVideoDetail(pageUrl: string): Promise<VideoDetail> {
     return { videoSrc, actors };
 }
 
-export async function resolveTermId(actorUrl: string): Promise<string | null> {
+async function resolveTermId(actorUrl: string): Promise<string | null> {
     const slug = actorUrl.replace(/^\/actor\//, '').replace(/\/$/, '');
     const r = await fetch(`${BASE_URL}/wp-json/wp/v2/actors?slug=${encodeURIComponent(slug)}`);
     const data = await r.json() as Array<{ id: number }>;
@@ -133,12 +137,73 @@ export async function resolveTermId(actorUrl: string): Promise<string | null> {
     return String(data[0].id);
 }
 
-export async function fetchChannelVideos(termId: string, page: number): Promise<{ ids: string[]; pageUrls: string[]; hasMore: boolean }> {
+async function fetchChannelVideos(termId: string, page: number): Promise<{ ids: string[]; hasMore: boolean }> {
     const r = await fetch(`${BASE_URL}/wp-json/wp/v2/posts?actors=${termId}&per_page=12&page=${page}`);
-    const posts = await r.json() as Array<{ id: number; link: string }>;
+    const data: unknown = await r.json();
+    const posts = Array.isArray(data)
+        ? data as Array<{ id: number; link: string }>
+        : [];
     return {
         ids: posts.map(p => String(p.id)),
-        pageUrls: posts.map(p => p.link),
         hasMore: posts.length >= 12,
     };
 }
+
+function recognize(url: URL): ProviderRoute {
+    if (url.hostname !== new URL(BASE_URL).hostname) return { kind: 'unsupported' };
+    if (url.pathname === '/') return { kind: 'favorites' };
+    if (url.pathname === '/favs' || url.pathname === '/favs/') {
+        return { kind: 'unsupported' };
+    }
+
+    const page = url.pathname.match(/^\/page\/(\d+)\/?$/);
+    if (page) {
+        const sitePage = Number.parseInt(page[1], 10);
+        return sitePage >= 2
+            ? { kind: 'listing', sitePage }
+            : { kind: 'unsupported' };
+    }
+
+    if (/^\/actor\/[^/]+\/?$/.test(url.pathname)) {
+        return { kind: 'actor', actorUrl: url.pathname.replace(/\/$/, '') };
+    }
+
+    if (/^\/[^/]+\/?$/.test(url.pathname)) {
+        return { kind: 'video', videoUrl: url.href };
+    }
+
+    return { kind: 'unsupported' };
+}
+
+async function fetchListing(clientPage: number) {
+    const startPage = Math.max(1, (clientPage - 1) * BATCH + 1);
+    const results = await fetchTypesenseBatch(startPage);
+    const videos = results.flatMap(result => result.items);
+    const found = results[0]?.found ?? 0;
+    return {
+        videos,
+        totalClientPages: Math.ceil(found / CLIENT_SIZE),
+    };
+}
+
+async function fetchListingPageCount(): Promise<number> {
+    const first = await fetchTypesensePage(1);
+    return Math.ceil(first.found / CLIENT_SIZE);
+}
+
+export const ytboob: Provider = {
+    hostname: new URL(BASE_URL).hostname,
+    clientPageSize: CLIENT_SIZE,
+    recognize,
+    clientPageForSitePage: sitePage => Math.ceil(sitePage / PROVIDER_PAGES_PER_CLIENT),
+    sitePageForClientPage: clientPage =>
+        Math.max(2, (clientPage - 1) * PROVIDER_PAGES_PER_CLIENT + 1),
+    indexForSitePage: (sitePage, clientPage) =>
+        (sitePage - 1) * SITE_SIZE - (clientPage - 1) * CLIENT_SIZE,
+    fetchListing,
+    fetchListingPageCount,
+    lookupVideos: lookupByIds,
+    fetchVideoDetail: scrapeVideoDetail,
+    resolveActorId: resolveTermId,
+    fetchActorVideoPage: fetchChannelVideos,
+};

@@ -1,28 +1,31 @@
-import { init as initFavs } from './routes/favs';
+import { providerFor } from './provider';
+import { init as initActor } from './routes/channel';
+import { init as initFavorites } from './routes/favs';
 import { init as initSearch } from './routes/search';
-import { init as initChannel } from './routes/channel';
+import { init as initVideo } from './routes/video';
 
 async function main(): Promise<void> {
-    const { pathname } = window.location;
+    const url = new URL(window.location.href);
+    const provider = providerFor(url);
+    if (!provider) return;
 
-    const pageMatch = pathname.match(/^\/page\/(\d+)\/$/);
-    if (pageMatch) {
-        void initSearch(parseInt(pageMatch[1], 10));
-        return;
+    const route = provider.recognize(url);
+    switch (route.kind) {
+        case 'favorites':
+            await initFavorites(provider);
+            break;
+        case 'listing':
+            await initSearch(provider, route.sitePage);
+            break;
+        case 'video':
+            await initVideo(provider, route.videoUrl);
+            break;
+        case 'actor':
+            await initActor(provider, route.actorUrl);
+            break;
+        case 'unsupported':
+            break;
     }
-
-    if (pathname.startsWith('/favs')) {
-        void initFavs();
-        return;
-    }
-
-    if (pathname.startsWith('/actor/')) {
-        void initChannel(pathname);
-        return;
-    }
-
-    // / → listing page 1
-    void initSearch(1);
 }
 
 void main();

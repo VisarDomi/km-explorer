@@ -1,115 +1,147 @@
+import type { Provider } from '../provider';
+import { getDetail, isFav, putDetail, toggleFav } from '../storage/db';
 import type { VideoStub } from '../types';
-import { isFav, toggleFav } from '../storage/db';
-import { getDetail, putDetail } from '../storage/db';
-import { scrapeVideoDetail } from '../provider/ytb';
 
 type CardClickHandler = (video: VideoStub) => void;
+type ReadyCallback = (videoSrc: string) => void;
 
-// --- Background prefetch worker ---
+interface CacheTask {
+    provider: Provider;
+    callbacks: Set<ReadyCallback>;
+}
 
-const pending: Array<{ pageUrl: string; onReady: (videoSrc: string) => void }> = [];
+const tasks = new Map<string, CacheTask>();
+const queue: string[] = [];
+const queued = new Set<string>();
 let workerRunning = false;
 
+function queueTask(pageUrl: string): void {
+    if (queued.has(pageUrl)) return;
+    queued.add(pageUrl);
+    queue.push(pageUrl);
+}
+
 async function runWorker(): Promise<void> {
+    if (workerRunning) return;
     workerRunning = true;
-    while (pending.length > 0) {
-        const item = pending.shift()!;
-        const detail = await scrapeVideoDetail(item.pageUrl);
-        await putDetail(item.pageUrl, detail);
-        item.onReady(detail.videoSrc);
+    try {
+        while (queue.length > 0) {
+            const pageUrl = queue.shift()!;
+            queued.delete(pageUrl);
+            const task = tasks.get(pageUrl);
+            if (!task) continue;
+
+            try {
+                const cached = await getDetail(pageUrl);
+                const detail = cached ?? await task.provider.fetchVideoDetail(pageUrl);
+                if (!cached) await putDetail(pageUrl, detail);
+                for (const callback of task.callbacks) callback(detail.videoSrc);
+                tasks.delete(pageUrl);
+            } catch (error) {
+                console.warn(`Could not cache ${pageUrl}`, error);
+            }
+        }
+    } finally {
+        workerRunning = false;
     }
-    workerRunning = false;
 }
 
-function enqueue(pageUrl: string, onReady: (videoSrc: string) => void): void {
-    pending.push({ pageUrl, onReady });
-    if (!workerRunning) void runWorker();
+function enqueue(provider: Provider, pageUrl: string, callback: ReadyCallback): void {
+    const existing = tasks.get(pageUrl);
+    if (existing) {
+        existing.callbacks.add(callback);
+    } else {
+        tasks.set(pageUrl, {
+            provider,
+            callbacks: new Set([callback]),
+        });
+    }
+    queueTask(pageUrl);
+    void runWorker();
 }
 
-// --- Card factory ---
+export function restartCardCacheWorker(): void {
+    for (const pageUrl of tasks.keys()) queueTask(pageUrl);
+    void runWorker();
+}
 
-export function createVideoCard(video: VideoStub, onClick: CardClickHandler): HTMLElement {
+window.addEventListener('pageshow', event => {
+    if (event.persisted) restartCardCacheWorker();
+});
+
+export function createVideoCard(
+    video: VideoStub,
+    onClick: CardClickHandler,
+    provider: Provider,
+): HTMLElement {
     const card = document.createElement('div');
     card.className = 'ke-card';
     card.style.opacity = '0.4';
     card.setAttribute('data-video-id', video.id);
 
-    const img = document.createElement('img');
-    img.src = video.thumbnail;
-    img.loading = 'lazy';
-    card.appendChild(img);
+    const image = document.createElement('img');
+    image.src = video.thumbnail;
+    image.loading = 'lazy';
+    card.appendChild(image);
 
     const spinner = document.createElement('div');
     spinner.className = 'ke-spinner-overlay';
     spinner.innerHTML = '<div class="ke-spinner"></div>';
-    spinner.style.display = 'none';
     card.appendChild(spinner);
 
     const copied = document.createElement('div');
     copied.className = 'ke-copied-overlay';
     copied.textContent = 'Copied';
-    copied.style.display = 'none';
     card.appendChild(copied);
 
-    const favBtn = document.createElement('button');
-    favBtn.className = 'ke-fav-toggle';
-    favBtn.textContent = '\u2661';
-    favBtn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const nowFav = await toggleFav(video.id);
-        favBtn.textContent = nowFav ? '\u2764' : '\u2661';
-        favBtn.classList.toggle('active', nowFav);
+    const favorite = document.createElement('button');
+    favorite.className = 'ke-fav-toggle';
+    favorite.textContent = '\u2661';
+    favorite.addEventListener('click', async event => {
+        event.stopPropagation();
+        const nowFavorite = await toggleFav(video.id);
+        favorite.textContent = nowFavorite ? '\u2764' : '\u2661';
+        favorite.classList.toggle('active', nowFavorite);
     });
-    void isFav(video.id).then(fav => {
-        favBtn.textContent = fav ? '\u2764' : '\u2661';
-        favBtn.classList.toggle('active', fav);
+    void isFav(video.id).then(isFavorite => {
+        favorite.textContent = isFavorite ? '\u2764' : '\u2661';
+        favorite.classList.toggle('active', isFavorite);
     });
-    card.appendChild(favBtn);
+    card.appendChild(favorite);
 
     let ready = false;
     let busy = false;
 
-    function markReady(videoSrc: string): void {
+    const markReady = (videoSrc: string): void => {
+        if (ready) return;
         ready = true;
         card.setAttribute('data-video-src', videoSrc);
         card.style.opacity = '1';
-    }
-
-    function markActivating(): void {
-        busy = true;
-        spinner.style.display = 'flex';
-    }
-
-    function markCopied(): void {
-        spinner.style.display = 'none';
-        copied.style.display = 'flex';
-        setTimeout(() => { copied.style.display = 'none'; busy = false; }, 1200);
-    }
+    };
 
     card.addEventListener('click', async () => {
         if (!ready || busy) return;
-        markActivating();
-
-        const src = card.getAttribute('data-video-src');
-        if (src) {
-            await navigator.clipboard.writeText(src);
+        busy = true;
+        spinner.style.display = 'flex';
+        const videoSrc = card.getAttribute('data-video-src');
+        try {
+            if (videoSrc) await navigator.clipboard.writeText(videoSrc);
+        } catch (error) {
+            console.warn('Could not copy media URL', error);
+        } finally {
+            spinner.style.display = 'none';
+            copied.style.display = 'flex';
+            onClick(video);
         }
-
-        markCopied();
-        onClick(video);
     });
 
-    // Self-register: check cache → ready or enqueue
-    void selfRegister(video, markReady);
+    void getDetail(video.pageUrl).then(detail => {
+        if (detail) {
+            markReady(detail.videoSrc);
+        } else {
+            enqueue(provider, video.pageUrl, markReady);
+        }
+    });
 
     return card;
-}
-
-async function selfRegister(video: VideoStub, markReady:(videoSrc: string) => void) {
-    const detail = await getDetail(video.pageUrl)
-    if (detail) {
-        markReady(detail.videoSrc);
-    } else {
-        enqueue(video.pageUrl, markReady);
-    }
 }

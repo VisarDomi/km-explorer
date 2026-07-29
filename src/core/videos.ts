@@ -1,8 +1,8 @@
-import {getDetail, getVideosByIds, putVideos} from "../storage/db";
-import {lookupByIds} from "../provider/ytb";
+import { getVideosByIds, putVideos } from '../storage/db';
+import type { Provider } from '../provider';
 import type {VideoStub} from "../types";
 
-export async function getVideos(ids: string[]) {
+export async function getVideos(ids: string[], provider: Provider): Promise<VideoStub[]> {
     const map = await getVideosByIds(ids);
     const missing = ids.filter(id => !map.has(id));
     if (missing.length > 0) {
@@ -11,7 +11,7 @@ export async function getVideos(ids: string[]) {
             chunks.push(missing.slice(i, i + 100));
         }
         for (const chunk of chunks) {
-            const fetched = await lookupByIds(chunk);
+            const fetched = await provider.lookupVideos(chunk);
             if (fetched.length > 0) {
                 await putVideos(fetched);
                 for (const v of fetched) {
@@ -20,11 +20,7 @@ export async function getVideos(ids: string[]) {
             }
         }
     }
-    const videos = ids.map(id => map.get(id)!);
-    return videos;
-}
-
-export async function onVideoClick(video: VideoStub) {
-    const detail = await getDetail(video.pageUrl);
-    window.location.href = detail.actors[0].url;
+    return ids
+        .map(id => map.get(id))
+        .filter((video): video is VideoStub => video !== undefined);
 }
