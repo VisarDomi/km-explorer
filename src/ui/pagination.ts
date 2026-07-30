@@ -11,7 +11,7 @@ export function createPagination(
 
     const favorites = document.createElement('button');
     favorites.className = 'ke-page-btn ke-page-favs';
-    favorites.textContent = '0';
+    favorites.textContent = 'Favs';
     favorites.setAttribute('aria-label', 'Favorites');
     favorites.classList.toggle('active', activePage === 0);
     favorites.addEventListener('click', () => {

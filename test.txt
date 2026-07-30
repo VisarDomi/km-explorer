@@ -28,7 +28,7 @@ Frozen critical behavior:
 - Opening another provider URL mapped to the same client page renders the same
   client-page data and positions the corresponding video.
 - The listing pagination appears above and below the video grid.
-- Favorites appears in the page-0 position before the numbered client pages.
+- Red `Favs` appears in the page-0 position before the numbered client pages.
 - Selecting page 0 opens `/`.
 - Selecting a numbered client page opens the first provider URL represented by
   that client page.
@@ -48,6 +48,9 @@ Frozen critical behavior:
 - Background card processing skips cards that are already ready.
 - Repeated worker starts do not duplicate completed work or change a ready
   card's result.
+- Only HTTPS media on `vidhost.me` makes a card ready.
+- A detail resolving to any other media host leaves the card dimmed and
+  unclickable, but marks it checked so later worker starts do not recheck it.
 - When a Favorites or listing page returns from bfcache, its card worker starts
   again from the first card.
 - The restarted worker checks IndexedDB in card order, immediately restores

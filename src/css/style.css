@@ -46,6 +46,11 @@ body {
     font-weight: bold;
 }
 
+.ke-page-favs,
+.ke-page-favs.active {
+    color: #ff3b30;
+}
+
 .ke-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -64,6 +69,11 @@ body {
     overflow: hidden;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+}
+
+.ke-card.ke-unavailable {
+    cursor: default;
+    filter: grayscale(1);
 }
 
 .ke-card.selected {

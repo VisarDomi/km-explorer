@@ -236,7 +236,7 @@ async function listingSnapshot({ ready = 0 } = {}) {
             savedScroll: localStorage.getItem("ke-scroll/page/2/"),
             scrollY,
             pageZero: [...document.querySelectorAll(".ke-pagination:first-of-type .ke-page-btn")]
-                .find(button => button.textContent === "0")?.getAttribute("aria-label") ?? null,
+                .find(button => button.textContent === "Favs")?.getAttribute("aria-label") ?? null,
             pageOneHref: "/page/2/",
         };
     `);
@@ -346,7 +346,9 @@ function fixtureSetupSource() {
                 globalThis.__kmFixtureDetailCalls[index] = calls;
                 if (index === 2 && calls === 1) return new Promise(() => {});
                 return new Response(
-                    '<meta itemprop="contentURL" content="https://media.example/' + index + '.mp4">' +
+                    '<meta itemprop="contentURL" content="' +
+                    (index === 3 ? "https://media.example/" : "https://vidhost.me/") +
+                    index + '.mp4">' +
                     '<a href="/actor/km-ios-fixture">Fixture Actor</a>',
                     { status: 200, headers: { "Content-Type": "text/html" } },
                 );
@@ -421,7 +423,11 @@ async function runCacheFixture() {
         for (let attempt = 0; attempt < 240; attempt++) {
             const ready = document.querySelectorAll(".ke-card[data-video-src]").length;
             const calls = globalThis.__kmFixtureDetailCalls?.[2] ?? 0;
-            if (window.__kmFixtureRestore?.persisted === true && ready >= 3 && calls >= 2) break;
+            const unavailable = document.querySelectorAll(
+                ".ke-card[data-video-unavailable]"
+            ).length;
+            if (window.__kmFixtureRestore?.persisted === true
+                && ready >= 3 && unavailable >= 1 && calls >= 2) break;
             await wait(100);
         }
         return {
@@ -432,17 +438,30 @@ async function runCacheFixture() {
             firstCalls: globalThis.__kmFixtureDetailCalls?.[0] ?? 0,
             secondCalls: globalThis.__kmFixtureDetailCalls?.[1] ?? 0,
             thirdCalls: globalThis.__kmFixtureDetailCalls?.[2] ?? 0,
+            fourthCalls: globalThis.__kmFixtureDetailCalls?.[3] ?? 0,
+            unavailable: document.querySelectorAll(
+                ".ke-card[data-video-checked][data-video-unavailable][aria-disabled='true']"
+            ).length,
         };
     `);
     assert(restored.persisted === true, "Fixture listing did not restore from bfcache", restored);
     assert(restored.thirdCalls >= 2, "Cache worker did not restart the suspended third card", restored);
     assert(restored.ready >= 3, "Restarted cache worker did not resolve the third card", restored);
+    assert(restored.unavailable >= 1, "Non-vidhost media was not terminally unavailable", restored);
+    assert(restored.fourthCalls === 1, "Unavailable card detail was checked more than once", restored);
+    await command(`
+        const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+        for (let attempt = 0; attempt < 240
+            && document.querySelectorAll(".ke-card[data-video-checked]").length
+                < ${fixtureCount}; attempt++) await wait(100);
+        return document.querySelectorAll(".ke-card[data-video-checked]").length;
+    `);
     return { initial, restored };
 }
 
 async function main() {
-    if (!["full", "smoke", "video"].includes(selection.test)) {
-        throw new Error(`Unknown test "${selection.test}". Expected full, smoke, or video.`);
+    if (!["full", "smoke", "video", "cache"].includes(selection.test)) {
+        throw new Error(`Unknown test "${selection.test}". Expected full, smoke, video, or cache.`);
     }
     if (selection.site && selection.site !== "ytboob") {
         throw new Error(`Unknown site "${selection.site}". Expected ytboob.`);
@@ -465,6 +484,15 @@ async function main() {
         ["npx", ["vite", "build"]],
     ]);
     bundle = await readFile(resolve(root, "dist/km-explorer.user.js"), "utf8");
+
+    if (selection.test === "cache") {
+        await check(
+            ["C1", "C2", "C3", "C4", "C5"],
+            "Deterministic bfcache fixture restarts cache and terminally rejects other hosts",
+            runCacheFixture,
+        );
+        return;
+    }
 
     if (selection.test === "video") {
         await navigate(playableUrl);
@@ -540,7 +568,7 @@ async function main() {
     await check(["F1", "F2", "F3", "P5"], "Favorites renders as complete client page 0", async () => {
         const state = await homeSnapshot();
         assert(state.href === homeUrl, "Favorites changed the provider Home URL", state);
-        assert(state.activePage === "0", "Favorites is not active page 0", state);
+        assert(state.activePage === "Favs", "Favorites is not active page 0", state);
         assert(state.paginationBars === 2, "Favorites does not have top and bottom navigation", state);
         assert(state.cardIds.length === state.favoriteIds.length, "Favorites grid count differs from its store", state);
         assert(
@@ -818,7 +846,11 @@ async function main() {
         return { before, after };
     });
 
-    await check(["C1", "C2", "C3", "C4", "C5"], "Deterministic bfcache fixture restarts cache from card 1 and resolves the suspended card", runCacheFixture);
+    await check(
+        ["C1", "C2", "C3", "C4", "C5"],
+        "Deterministic bfcache fixture restarts cache and terminally rejects other hosts",
+        runCacheFixture,
+    );
 
     await check(["R1", "R2", "R3", "R4", "R5"], "Shared routes consume the provider boundary", async () => {
         const files = [

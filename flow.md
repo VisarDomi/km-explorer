@@ -2,7 +2,7 @@
 
 1. `/` → all Favorites in one grid → client page 0
 2. `/page/2/` → client listing page 1 → scroll to provider page 2 position
-3. Client pagination → Favorites at 0 → listing pages map to their first provider URLs
+3. Client pagination → red Favs at 0 → listing pages map to their first provider URLs
 4. Listing scroll → `scrollend` saves position
 5. Ready card click → copy media URL → hard-nav to its existing provider video URL
 6. Video page → full-width control-free video → app controls + horizontal scrubbing → single actor's videos

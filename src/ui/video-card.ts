@@ -3,11 +3,16 @@ import { getDetail, isFav, putDetail, toggleFav } from '../storage/db';
 import type { VideoStub } from '../types';
 
 type CardClickHandler = (video: VideoStub) => void;
-type ReadyCallback = (videoSrc: string) => void;
+interface CardResolution {
+    videoSrc: string;
+    available: boolean;
+}
+type ReadyCallback = (resolution: CardResolution) => void;
 
 interface CacheTask {
     provider: Provider;
     callbacks: Set<ReadyCallback>;
+    terminalResolution?: CardResolution;
 }
 
 const tasks = new Map<string, CacheTask>();
@@ -18,6 +23,7 @@ let runningGeneration: number | null = null;
 let restartListenerInstalled = false;
 
 function queueTask(pageUrl: string): void {
+    if (tasks.get(pageUrl)?.terminalResolution) return;
     if (queued.has(pageUrl)) return;
     queued.add(pageUrl);
     queue.push(pageUrl);
@@ -41,7 +47,12 @@ async function runWorker(): Promise<void> {
                 if (generation !== workerGeneration) return;
                 if (!cached) await putDetail(pageUrl, detail);
                 if (generation !== workerGeneration) return;
-                for (const callback of task.callbacks) callback(detail.videoSrc);
+                const resolution = {
+                    videoSrc: detail.videoSrc,
+                    available: isAvailableVideoSource(detail.videoSrc),
+                };
+                if (!resolution.available) task.terminalResolution = resolution;
+                for (const callback of task.callbacks) callback(resolution);
             } catch (error) {
                 console.warn(`Could not cache ${pageUrl}`, error);
             }
@@ -55,6 +66,10 @@ function enqueue(provider: Provider, pageUrl: string, callback: ReadyCallback): 
     const existing = tasks.get(pageUrl);
     if (existing) {
         existing.callbacks.add(callback);
+        if (existing.terminalResolution) {
+            callback(existing.terminalResolution);
+            return;
+        }
     } else {
         tasks.set(pageUrl, {
             provider,
@@ -63,6 +78,15 @@ function enqueue(provider: Provider, pageUrl: string, callback: ReadyCallback): 
     }
     queueTask(pageUrl);
     void runWorker();
+}
+
+function isAvailableVideoSource(videoSrc: string): boolean {
+    try {
+        const url = new URL(videoSrc);
+        return url.protocol === 'https:' && url.hostname === 'vidhost.me';
+    } catch {
+        return false;
+    }
 }
 
 export function restartCardCacheWorker(): void {
@@ -128,8 +152,17 @@ export function createVideoCard(
     let ready = false;
     let busy = false;
 
-    const markReady = (videoSrc: string): void => {
-        if (ready) return;
+    let checked = false;
+    const markChecked = ({ videoSrc, available }: CardResolution): void => {
+        if (checked) return;
+        checked = true;
+        card.setAttribute('data-video-checked', 'true');
+        if (!available) {
+            card.classList.add('ke-unavailable');
+            card.setAttribute('data-video-unavailable', 'true');
+            card.setAttribute('aria-disabled', 'true');
+            return;
+        }
         ready = true;
         card.setAttribute('data-video-src', videoSrc);
         card.style.opacity = '1';
@@ -151,7 +184,7 @@ export function createVideoCard(
         }
     });
 
-    enqueue(provider, video.pageUrl, markReady);
+    enqueue(provider, video.pageUrl, markChecked);
 
     return card;
 }
