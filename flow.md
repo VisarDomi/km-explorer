@@ -5,7 +5,7 @@
 3. Client pagination → Favorites at 0 → listing pages map to their first provider URLs
 4. Listing scroll → `scrollend` saves position
 5. Ready card click → copy media URL → hard-nav to its existing provider video URL
-6. Video page → full-width control-free video → app controls → single actor's videos
+6. Video page → full-width control-free video → app controls + horizontal scrubbing → single actor's videos
 7. Video attempts playback whether or not Safari can play it; media URL was always copied
 8. Actor-video card click → copy media URL → `location.replace()` its provider video URL
 9. Repeat video replacements → one Back swipe returns to the original Favorites/listing bfcache entry

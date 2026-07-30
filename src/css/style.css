@@ -201,6 +201,7 @@ body {
     max-height: 75vh;
     background: #000;
     object-fit: contain;
+    touch-action: pan-y pinch-zoom;
 }
 
 .ke-video-controls {

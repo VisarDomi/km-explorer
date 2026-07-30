@@ -486,7 +486,7 @@ async function main() {
             assert(state.actorCards > 1, "Zoe actor grid did not render", state);
             return state;
         });
-        await check(["V3"], "Player pause control round-trips", async () => {
+        await check(["V3", "V7"], "Player pause and swipe-scrub controls work", async () => {
             const state = await command(`
                 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
                 const video = document.querySelector(".ke-video");
@@ -503,16 +503,32 @@ async function main() {
                     resume.click();
                     await wait(250);
                 }
+                video.currentTime = 1;
+                const touchEvent = (type, touches) => {
+                    const event = new Event(type, { bubbles: true, cancelable: true });
+                    Object.defineProperty(event, "touches", { value: touches });
+                    video.dispatchEvent(event);
+                };
+                touchEvent("touchstart", [{ clientX: 100, clientY: 50 }]);
+                touchEvent("touchmove", [{
+                    clientX: 100 + innerWidth / 4,
+                    clientY: 50,
+                }]);
+                const scrubbedTime = video.currentTime;
+                touchEvent("touchend", []);
+                await wait(250);
                 return {
                     beforePause,
                     paused,
                     resumeFound: Boolean(resume),
                     resumed: !video.paused,
+                    scrubbedTime,
                     labels: [...document.querySelectorAll(".ke-player-btn")]
                         .map(button => button.getAttribute("aria-label")),
                 };
             `);
             assert(state.paused && state.resumed, "Play control did not round-trip", state);
+            assert(Math.abs(state.scrubbedTime - 16) < 1, "Video swipe did not scrub 15 seconds", state);
             return state;
         });
         return;
@@ -676,7 +692,7 @@ async function main() {
 
     await navigate(playableUrl);
     await inject();
-    await check(["V3", "V4", "V5", "A2", "A3"], "Player controls work and selected actor card is disabled", async () => {
+    await check(["V3", "V4", "V5", "V7", "A2", "A3"], "Player controls work and selected actor card is disabled", async () => {
         const state = await command(`
             const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
             for (let attempt = 0; attempt < 240
@@ -698,6 +714,20 @@ async function main() {
             const resume = document.querySelector('[aria-label="Play"]');
             if (resume) resume.click();
             await wait(250);
+            video.currentTime = 1;
+            const touchEvent = (type, touches) => {
+                const event = new Event(type, { bubbles: true, cancelable: true });
+                Object.defineProperty(event, "touches", { value: touches });
+                video.dispatchEvent(event);
+            };
+            touchEvent("touchstart", [{ clientX: 100, clientY: 50 }]);
+            touchEvent("touchmove", [{
+                clientX: 100 + innerWidth / 4,
+                clientY: 50,
+            }]);
+            const scrubbedTime = video.currentTime;
+            touchEvent("touchend", []);
+            await wait(250);
             const rect = progress.getBoundingClientRect();
             progress.dispatchEvent(new PointerEvent("pointerdown", {
                 bubbles: true,
@@ -718,6 +748,7 @@ async function main() {
                 before,
                 paused,
                 resumed: !video.paused,
+                scrubbedTime,
                 seekedTime: video.currentTime,
                 duration: video.duration,
                 selectedDisabled: selected.getAttribute("aria-disabled"),
@@ -726,6 +757,7 @@ async function main() {
             };
         `);
         assert(state.paused && state.resumed, "Play control did not round-trip", state);
+        assert(Math.abs(state.scrubbedTime - 16) < 1, "Video swipe did not scrub 15 seconds", state);
         assert(Math.abs(state.seekedTime - state.duration / 2) < 2, "Progress bar did not seek to its midpoint", state);
         assert(state.selectedDisabled === "true", "Current actor card is not disabled", state);
         assert(state.href === state.before.href && state.copied === null, "Current actor card copied or navigated", state);

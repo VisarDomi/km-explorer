@@ -3,6 +3,7 @@ import { fetchActorVideos, getCachedActorVideos } from '../core/actor-videos';
 import { getDetail, putDetail } from '../storage/db';
 import { startInit } from '../ui/shell';
 import { createVideoCard } from '../ui/video-card';
+import { addVideoScrubbing } from '../ui/video-gesture';
 import type { VideoDetail, VideoStub } from '../types';
 
 function sameProviderPage(left: string, right: string): boolean {
@@ -35,6 +36,7 @@ function createPlayer(videoSrc: string): {
     video.playsInline = true;
     video.controls = false;
     video.preload = 'auto';
+    addVideoScrubbing(video);
 
     const controls = document.createElement('div');
     controls.className = 'ke-video-controls';

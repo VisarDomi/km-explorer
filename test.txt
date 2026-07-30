@@ -69,6 +69,10 @@ Frozen critical behavior:
 - Precise current-time and duration numbers are displayed directly below the
   video.
 - A seekable progress bar appears below the time display and tracks playback.
+- A one-finger horizontal swipe on the video scrubs by 60 seconds per viewport
+  width and resumes playback on release.
+- Vertical movement, multi-touch, and a swipe beginning in Safari's 28px
+  leading-edge Back area remain browser-owned.
 - Icon-only play/pause and mute/unmute controls appear below the progress bar.
 - The page does not automatically scroll after takeover or data loading.
 - Safari attempts to play the selected media.
