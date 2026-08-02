@@ -41,6 +41,12 @@ Frozen critical behavior:
 - One Safari Back swipe restores the listing from bfcache.
 - The restored document retains its DOM, active client page, ready-card state,
   and exact viewport position.
+- Back through bfcache removes the clicked card's transient Copied/busy state,
+  highlights exactly that card, and does not move Safari's restored viewport.
+- The highlighted returned card is clickable again.
+- The last opened card identity is stored in localStorage.
+- A normal listing reload highlights and centers the stored card; bfcache
+  restoration never performs that centering.
 
 4. Card detail cache
 - Each card resolves the detail data and media URL required to become ready.

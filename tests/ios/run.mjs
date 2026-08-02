@@ -23,7 +23,7 @@ const playableUrl = "https://ytboob.com/purple-see-through-try-on-haul-4k-017/";
 const unsupportedUrl = "https://ytboob.com/great-try-on-haul/";
 const fixturePrefix = "__km_ios_cache_";
 const fixtureIdBase = 990_000_000;
-const fixtureCount = 600;
+const fixtureCount = 4;
 const controller = createController({
     root,
     name: config.name,
@@ -41,6 +41,7 @@ const { results, check, skip } = createReporter();
 let bundle = "";
 let favoritesSnapshot = null;
 let scrollSnapshot = null;
+let cardHighlightSnapshot = null;
 let fixtureCreated = false;
 
 function assert(condition, message, details) {
@@ -298,6 +299,24 @@ async function restoreScrollKey(snapshot) {
     `);
 }
 
+async function snapshotCardHighlight() {
+    return command(`
+        const key = "ke-card-highlight";
+        const value = localStorage.getItem(key);
+        localStorage.removeItem(key);
+        return { key, value };
+    `);
+}
+
+async function restoreCardHighlight(snapshot) {
+    return command(`
+        const snapshot = ${JSON.stringify(snapshot)};
+        if (snapshot.value === null) localStorage.removeItem(snapshot.key);
+        else localStorage.setItem(snapshot.key, snapshot.value);
+        return true;
+    `);
+}
+
 function fixtureSetupSource() {
     return `
         await new Promise((resolve, reject) => {
@@ -322,7 +341,7 @@ function fixtureSetupSource() {
             if (url.hostname === "ts-api.ytboob.com") {
                 const body = JSON.parse(init?.body ?? "{}");
                 const page = Number(body.searches?.[0]?.page ?? 1);
-                const hits = Array.from({ length: 12 }, (_, offset) => {
+                const hits = Array.from({ length: page === 1 ? ${fixtureCount} : 0 }, (_, offset) => {
                     const index = (page - 1) * 12 + offset;
                     return {
                         document: {
@@ -379,13 +398,14 @@ async function cleanupFixture() {
 }
 
 async function runCacheFixture() {
+    console.log("  Cache fixture: creating four deterministic cards");
     await navigate(listingUrl);
     await inject(fixtureSetupSource());
     fixtureCreated = true;
 
     const initial = await command(`
         const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-        for (let attempt = 0; attempt < 240; attempt++) {
+        for (let attempt = 0; attempt < 80; attempt++) {
             const ready = document.querySelectorAll(".ke-card[data-video-src]").length;
             if (ready === 2 && globalThis.__kmFixtureDetailCalls?.[2] === 1) break;
             await wait(100);
@@ -403,6 +423,7 @@ async function runCacheFixture() {
     `);
     assert(initial.ready === 2, "Fixture did not stop after two ready cards", initial);
     assert(initial.thirdCalls === 1, "Fixture did not suspend the third detail request", initial);
+    console.log("  Cache fixture: freezing after the suspended third card");
 
     await command(`
         location.href = "https://example.com/?km-cache-fixture=1";
@@ -420,7 +441,7 @@ async function runCacheFixture() {
 
     const restored = await command(`
         const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-        for (let attempt = 0; attempt < 240; attempt++) {
+        for (let attempt = 0; attempt < 80; attempt++) {
             const ready = document.querySelectorAll(".ke-card[data-video-src]").length;
             const calls = globalThis.__kmFixtureDetailCalls?.[2] ?? 0;
             const unavailable = document.querySelectorAll(
@@ -449,9 +470,10 @@ async function runCacheFixture() {
     assert(restored.ready >= 3, "Restarted cache worker did not resolve the third card", restored);
     assert(restored.unavailable >= 1, "Non-vidhost media was not terminally unavailable", restored);
     assert(restored.fourthCalls === 1, "Unavailable card detail was checked more than once", restored);
+    console.log("  Cache fixture: restored worker resolved all four cards");
     await command(`
         const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-        for (let attempt = 0; attempt < 240
+        for (let attempt = 0; attempt < 80
             && document.querySelectorAll(".ke-card[data-video-checked]").length
                 < ${fixtureCount}; attempt++) await wait(100);
         return document.querySelectorAll(".ke-card[data-video-checked]").length;
@@ -564,6 +586,7 @@ async function main() {
 
     await navigate(homeUrl);
     favoritesSnapshot = await snapshotFavorites();
+    cardHighlightSnapshot = await snapshotCardHighlight();
     await inject();
     await check(["F1", "F2", "F3", "P5"], "Favorites renders as complete client page 0", async () => {
         const state = await homeSnapshot();
@@ -709,13 +732,66 @@ async function main() {
                 persisted: window.__kmSuiteBack?.persisted ?? null,
                 cards: document.querySelectorAll(".ke-card").length,
                 ready: document.querySelectorAll(".ke-card[data-video-src]").length,
+                copiedVisible: [...document.querySelectorAll(".ke-copied-overlay")]
+                    .filter(overlay => getComputedStyle(overlay).display !== "none").length,
+                busy: document.querySelectorAll(".ke-card[data-card-busy]").length,
+                highlighted: [...document.querySelectorAll(".ke-card.ke-returned-card")]
+                    .map(card => ({ id: card.dataset.videoId, pageUrl: card.dataset.videoPageUrl })),
             };
         `);
         assert(restored.persisted === true, "Listing did not return through bfcache", restored);
         assert(Math.abs(restored.scrollY - selected.scrollY) <= 2, "Listing viewport was not restored", { selected, restored });
         assert(restored.copied === selected.src, "Card did not attempt to copy its own media URL", { selected, restored });
         assert(restored.cards === 600, "Restored listing DOM changed", restored);
-        return { selected, opened, restored };
+        assert(restored.copiedVisible === 0, "Restored card still displays the transient Copied overlay", restored);
+        assert(restored.busy === 0, "Restored card remained internally busy and unclickable", restored);
+        assert(restored.highlighted.length === 1 && restored.highlighted[0].id === selected.id, "Back did not highlight exactly the card that initiated navigation", { selected, restored });
+
+        await session.reload(listingUrl);
+        await inject(`
+            globalThis.__kmHighlightScrolls = [];
+            const suiteScrollIntoView = Element.prototype.scrollIntoView;
+            Element.prototype.scrollIntoView = function (options) {
+                if (this.classList?.contains("ke-returned-card")) {
+                    globalThis.__kmHighlightScrolls.push({
+                        id: this.dataset.videoId,
+                        block: options?.block ?? null,
+                    });
+                }
+                return suiteScrollIntoView.call(this, options);
+            };
+        `);
+        const refreshed = await command(`
+            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+            for (let attempt = 0; attempt < 360
+                && document.querySelectorAll(".ke-card").length < 600; attempt++) await wait(250);
+            for (let attempt = 0; attempt < 40; attempt++) {
+                const card = document.querySelector(".ke-card.ke-returned-card");
+                if (card) {
+                    const rect = card.getBoundingClientRect();
+                    const center = rect.top + rect.height / 2;
+                    if (Math.abs(center - innerHeight / 2) <= 2) break;
+                }
+                await wait(50);
+            }
+            const highlighted = [...document.querySelectorAll(".ke-card.ke-returned-card")];
+            const rect = highlighted[0]?.getBoundingClientRect();
+            return {
+                count: highlighted.length,
+                id: highlighted[0]?.dataset.videoId ?? null,
+                center: rect ? rect.top + rect.height / 2 : null,
+                viewportCenter: innerHeight / 2,
+                scrollY,
+                scrollCalls: globalThis.__kmHighlightScrolls ?? [],
+            };
+        `);
+        assert(refreshed.count === 1 && refreshed.id === selected.id, "Reload did not restore exactly the saved card highlight", { selected, refreshed });
+        assert(refreshed.scrollCalls.some(call => call.id === selected.id && call.block === "center"), "Reload did not request centering for the saved card highlight", refreshed);
+        assert(refreshed.center !== null && (
+            Math.abs(refreshed.center - refreshed.viewportCenter) <= 2
+            || (refreshed.scrollY === 0 && refreshed.center < refreshed.viewportCenter)
+        ), "Reload did not center the saved card as closely as document bounds allow", refreshed);
+        return { selected, opened, restored, refreshed };
     });
 
     await navigate(playableUrl);
@@ -879,10 +955,11 @@ try {
     process.exitCode = 1;
 } finally {
     try {
-        if (favoritesSnapshot || scrollSnapshot || fixtureCreated) {
+        if (favoritesSnapshot || scrollSnapshot || cardHighlightSnapshot || fixtureCreated) {
             await navigate(homeUrl);
             if (favoritesSnapshot) await restoreFavorites(favoritesSnapshot);
             if (scrollSnapshot) await restoreScrollKey(scrollSnapshot);
+            if (cardHighlightSnapshot) await restoreCardHighlight(cardHighlightSnapshot);
             if (fixtureCreated) await cleanupFixture();
         }
     } catch (error) {

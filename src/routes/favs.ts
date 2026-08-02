@@ -2,7 +2,7 @@ import type { Provider } from '../provider';
 import { mergeFavs, preloadFavs } from '../storage/db';
 import { getVideos } from '../core/videos';
 import { startInit, getGrid } from '../ui/shell';
-import { createVideoCard } from '../ui/video-card';
+import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
 import { replacePagination } from '../ui/pagination';
 import type { VideoStub } from '../types';
 
@@ -91,6 +91,7 @@ export async function init(provider: Provider): Promise<void> {
 
     const ids = await preloadFavs();
     render(await getVideos(ids, provider), provider);
+    centerStoredCardHighlight();
     replacePagination(0, 0, provider, grid);
     buildImportSection(ids, provider);
 

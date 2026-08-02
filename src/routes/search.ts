@@ -1,7 +1,7 @@
 import type { Provider } from '../provider';
 import { getAllVideos, putVideos } from '../storage/db';
 import { getGrid, startInit } from '../ui/shell';
-import { createVideoCard } from '../ui/video-card';
+import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
 import { replacePagination } from '../ui/pagination';
 
 const SCROLL_KEY = 'ke-scroll';
@@ -45,6 +45,7 @@ export async function init(provider: Provider, sitePage: number): Promise<void> 
         grid.appendChild(card);
     });
     replacePagination(clientPage, result.totalClientPages, provider, grid);
+    centerStoredCardHighlight();
 
     const savedY = loadScroll();
     if (savedY !== null) {

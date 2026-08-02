@@ -15,12 +15,68 @@ interface CacheTask {
     terminalResolution?: CardResolution;
 }
 
+interface StoredCardIdentity {
+    id: string;
+    pageUrl: string;
+}
+
+const CARD_HIGHLIGHT_KEY = 'ke-card-highlight';
+
 const tasks = new Map<string, CacheTask>();
 const queue: string[] = [];
 const queued = new Set<string>();
 let workerGeneration = 0;
 let runningGeneration: number | null = null;
 let restartListenerInstalled = false;
+let highlightCentered = false;
+
+function readCardHighlight(): StoredCardIdentity | null {
+    try {
+        const value = JSON.parse(localStorage.getItem(CARD_HIGHLIGHT_KEY) ?? 'null') as StoredCardIdentity | null;
+        return value
+            && typeof value.id === 'string'
+            && typeof value.pageUrl === 'string'
+            ? value
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function writeCardHighlight(video: VideoStub): void {
+    try {
+        localStorage.setItem(CARD_HIGHLIGHT_KEY, JSON.stringify({
+            id: video.id,
+            pageUrl: video.pageUrl,
+        } satisfies StoredCardIdentity));
+    } catch {
+        // Storage can be unavailable in private browsing.
+    }
+}
+
+function cardMatchesHighlight(card: HTMLElement, highlight: StoredCardIdentity | null): boolean {
+    return highlight !== null
+        && card.dataset.videoId === highlight.id
+        && card.dataset.videoPageUrl === highlight.pageUrl
+        && card.getAttribute('aria-disabled') !== 'true';
+}
+
+function syncCardHighlight(card: HTMLElement, highlight = readCardHighlight()): void {
+    card.classList.toggle('ke-returned-card', cardMatchesHighlight(card, highlight));
+}
+
+export function centerStoredCardHighlight(): void {
+    if (highlightCentered) return;
+    const card = document.querySelector<HTMLElement>('.ke-card.ke-returned-card');
+    if (!card) return;
+    highlightCentered = true;
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            document.querySelector<HTMLElement>('.ke-card.ke-returned-card')
+                ?.scrollIntoView({ block: 'center' });
+        });
+    });
+}
 
 function queueTask(pageUrl: string): void {
     if (tasks.get(pageUrl)?.terminalResolution) return;
@@ -101,7 +157,17 @@ function installRestartListener(): void {
     if (restartListenerInstalled) return;
     restartListenerInstalled = true;
     window.addEventListener('pageshow', event => {
-        if (event.persisted) restartCardCacheWorker();
+        if (!event.persisted) return;
+        const highlight = readCardHighlight();
+        document.querySelectorAll<HTMLElement>('.ke-card').forEach(card => {
+            card.removeAttribute('data-card-busy');
+            const spinner = card.querySelector<HTMLElement>('.ke-spinner-overlay');
+            const copied = card.querySelector<HTMLElement>('.ke-copied-overlay');
+            if (spinner) spinner.style.display = 'none';
+            if (copied) copied.style.display = 'none';
+            syncCardHighlight(card, highlight);
+        });
+        restartCardCacheWorker();
     });
 }
 
@@ -117,7 +183,9 @@ export function createVideoCard(
     card.className = 'ke-card';
     card.style.opacity = '0.4';
     card.setAttribute('data-video-id', video.id);
+    card.setAttribute('data-video-page-url', video.pageUrl);
     if (disabled) card.setAttribute('aria-disabled', 'true');
+    syncCardHighlight(card);
 
     const image = document.createElement('img');
     image.src = video.thumbnail;
@@ -150,8 +218,6 @@ export function createVideoCard(
     card.appendChild(favorite);
 
     let ready = false;
-    let busy = false;
-
     let checked = false;
     const markChecked = ({ videoSrc, available }: CardResolution): void => {
         if (checked) return;
@@ -169,8 +235,9 @@ export function createVideoCard(
     };
 
     card.addEventListener('click', async () => {
-        if (disabled || !ready || busy) return;
-        busy = true;
+        if (disabled || !ready || card.hasAttribute('data-card-busy')) return;
+        card.setAttribute('data-card-busy', 'true');
+        writeCardHighlight(video);
         spinner.style.display = 'flex';
         const videoSrc = card.getAttribute('data-video-src');
         try {

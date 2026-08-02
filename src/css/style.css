@@ -82,6 +82,11 @@ body {
     cursor: default;
 }
 
+.ke-card.ke-returned-card {
+    outline: 3px solid #0055ff;
+    outline-offset: -3px;
+}
+
 .ke-card img {
     width: 100%;
     height: 100%;
