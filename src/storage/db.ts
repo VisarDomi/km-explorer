@@ -5,89 +5,222 @@ const DB_VERSION = 4;
 const VIDEO_STORE = 'videos';
 const DETAIL_STORE = 'details';
 const FAV_STORE = 'favorites';
+const CHANNEL_STORE = 'channels';
+const DEFAULT_TRANSACTION_TIMEOUT_MS = 15_000;
+const DETAIL_TRANSACTION_TIMEOUT_MS = 2_000;
+
+interface TransactionOptions {
+    abortOnPageHide?: boolean;
+    timeoutMs?: number;
+}
+
+interface ActiveTransaction {
+    transaction: IDBTransaction;
+    abortOnPageHide: boolean;
+}
+
+let dbPromise: Promise<IDBDatabase> | null = null;
+let database: IDBDatabase | null = null;
+let connectionGeneration = 0;
+const activeTransactions = new Set<ActiveTransaction>();
+
+function clearConnection(db: IDBDatabase): void {
+    if (database !== db) return;
+    database = null;
+    dbPromise = null;
+}
+
+function closeDatabase(abortDisposableTransactions: boolean): void {
+    connectionGeneration++;
+    if (abortDisposableTransactions) {
+        for (const active of activeTransactions) {
+            if (!active.abortOnPageHide) continue;
+            try {
+                active.transaction.abort();
+            } catch {
+                // The transaction may already be finishing.
+            }
+        }
+    }
+
+    const db = database;
+    database = null;
+    dbPromise = null;
+    db?.close();
+}
+
+window.addEventListener('pagehide', () => closeDatabase(true));
 
 function openDB(): Promise<IDBDatabase> {
+    if (dbPromise) return dbPromise;
+
+    const generation = connectionGeneration;
     const { promise, resolve, reject } = Promise.withResolvers<IDBDatabase>();
+    let settled = false;
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+
+    req.onupgradeneeded = (event) => {
         const db = req.result;
+        const oldVersion = event.oldVersion;
+
         if (!db.objectStoreNames.contains(VIDEO_STORE)) db.createObjectStore(VIDEO_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains(DETAIL_STORE)) db.createObjectStore(DETAIL_STORE, { keyPath: 'pageUrl' });
         if (!db.objectStoreNames.contains(FAV_STORE)) db.createObjectStore(FAV_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('channels')) db.createObjectStore('channels', { keyPath: 'actorUrl' });
-        // v4: nuke old details store (video_src → videoSrc mismatch)
-        if (db.objectStoreNames.contains(DETAIL_STORE)) db.deleteObjectStore(DETAIL_STORE);
-        db.createObjectStore(DETAIL_STORE, { keyPath: 'pageUrl' });
+        if (!db.objectStoreNames.contains(CHANNEL_STORE)) db.createObjectStore(CHANNEL_STORE, { keyPath: 'actorUrl' });
+
+        // v4 replaced records using video_src with records using videoSrc.
+        // Guarding this migration prevents a future version bump from clearing the cache again.
+        if (oldVersion < 4) {
+            if (db.objectStoreNames.contains(DETAIL_STORE)) db.deleteObjectStore(DETAIL_STORE);
+            db.createObjectStore(DETAIL_STORE, { keyPath: 'pageUrl' });
+        } else if (!db.objectStoreNames.contains(DETAIL_STORE)) {
+            db.createObjectStore(DETAIL_STORE, { keyPath: 'pageUrl' });
+        }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+        const db = req.result;
+        if (settled || generation !== connectionGeneration) {
+            db.close();
+            if (!settled) {
+                settled = true;
+                reject(new DOMException('IndexedDB open was cancelled by navigation', 'AbortError'));
+            }
+            return;
+        }
+
+        settled = true;
+        database = db;
+        db.onversionchange = () => {
+            clearConnection(db);
+            db.close();
+        };
+        db.onclose = () => clearConnection(db);
+        resolve(db);
+    };
+    req.onerror = () => {
+        if (settled) return;
+        settled = true;
+        reject(req.error ?? new DOMException('Could not open IndexedDB', 'UnknownError'));
+    };
+    req.onblocked = () => {
+        if (settled) return;
+        settled = true;
+        reject(new DOMException('IndexedDB upgrade is blocked by another page', 'InvalidStateError'));
+    };
+
+    dbPromise = promise;
+    void promise.catch(() => {
+        if (dbPromise === promise) dbPromise = null;
+    });
     return promise;
+}
+
+function waitForTransaction(
+    transaction: IDBTransaction,
+    { abortOnPageHide = false, timeoutMs = DEFAULT_TRANSACTION_TIMEOUT_MS }: TransactionOptions = {},
+): Promise<void> {
+    const active = { transaction, abortOnPageHide };
+    activeTransactions.add(active);
+
+    return new Promise<void>((resolve, reject) => {
+        let timedOut = false;
+        let settled = false;
+        const timeout = window.setTimeout(() => {
+            timedOut = true;
+            try {
+                transaction.abort();
+            } catch {
+                // Reject below even if Safari no longer considers the transaction abortable.
+            }
+            finish(() => reject(new DOMException('IndexedDB transaction timed out', 'TimeoutError')));
+        }, timeoutMs);
+
+        const finish = (complete: () => void): void => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            activeTransactions.delete(active);
+            complete();
+        };
+
+        transaction.addEventListener('complete', () => finish(resolve), { once: true });
+        transaction.addEventListener('abort', () => finish(() => reject(
+            timedOut
+                ? new DOMException('IndexedDB transaction timed out', 'TimeoutError')
+                : transaction.error ?? new DOMException('IndexedDB transaction was aborted', 'AbortError'),
+        )), { once: true });
+    });
+}
+
+async function useTransaction(
+    storeName: string,
+    mode: IDBTransactionMode,
+    operation: (store: IDBObjectStore) => void,
+    options?: TransactionOptions,
+): Promise<void> {
+    const db = await openDB();
+    const transaction = db.transaction(storeName, mode);
+    const done = waitForTransaction(transaction, options);
+    try {
+        operation(transaction.objectStore(storeName));
+    } catch (error) {
+        try {
+            transaction.abort();
+        } catch {
+            // Preserve the original synchronous error.
+        }
+        void done.catch(() => undefined);
+        throw error;
+    }
+    await done;
 }
 
 // --- Videos ---
 
 export async function getAllVideos(): Promise<VideoStub[]> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<VideoStub[]>();
-    const req = db.transaction(VIDEO_STORE, 'readonly').objectStore(VIDEO_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as VideoStub[]);
-    req.onerror = () => reject(req.error!);
-    return promise;
+    let videos: VideoStub[] = [];
+    await useTransaction(VIDEO_STORE, 'readonly', store => {
+        const req = store.getAll();
+        req.onsuccess = () => { videos = req.result as VideoStub[]; };
+    }, { abortOnPageHide: true });
+    return videos;
 }
 
 export async function putVideos(videos: VideoStub[]): Promise<void> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<void>();
-    const tx = db.transaction(VIDEO_STORE, 'readwrite');
-    const store = tx.objectStore(VIDEO_STORE);
-    for (const v of videos) store.put(v);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error!);
-    return promise;
+    await useTransaction(VIDEO_STORE, 'readwrite', store => {
+        for (const video of videos) store.put(video);
+    }, { abortOnPageHide: true });
 }
 
 export async function getVideosByIds(ids: string[]): Promise<Map<string, VideoStub>> {
-    const map = new Map<string, VideoStub>();
-    if (ids.length === 0) return map;
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<Map<string, VideoStub>>();
-    const tx = db.transaction(VIDEO_STORE, 'readonly');
-    const store = tx.objectStore(VIDEO_STORE);
-    let pending = ids.length;
-    let firstError: DOMException | null = null;
-    for (const id of ids) {
-        const req = store.get(id);
-        req.onsuccess = () => {
-            if (req.result) map.set(id, req.result);
-            if (--pending === 0) firstError ? reject(firstError) : resolve(map);
-        };
-        req.onerror = () => {
-            if (!firstError) firstError = req.error;
-            if (--pending === 0) reject(firstError!);
-        };
-    }
-    return promise;
+    const videos = new Map<string, VideoStub>();
+    if (ids.length === 0) return videos;
+
+    await useTransaction(VIDEO_STORE, 'readonly', store => {
+        for (const id of ids) {
+            const req = store.get(id);
+            req.onsuccess = () => {
+                if (req.result) videos.set(id, req.result as VideoStub);
+            };
+        }
+    }, { abortOnPageHide: true });
+    return videos;
 }
 
 // --- Details ---
 
 export async function getDetail(pageUrl: string): Promise<VideoDetail | undefined> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<VideoDetail | undefined>();
-    const req = db.transaction(DETAIL_STORE, 'readonly').objectStore(DETAIL_STORE).get(pageUrl);
-    req.onsuccess = () => resolve(req.result as VideoDetail | undefined);
-    req.onerror = () => reject(req.error!);
-    return promise;
+    let detail: VideoDetail | undefined;
+    await useTransaction(DETAIL_STORE, 'readonly', store => {
+        const req = store.get(pageUrl);
+        req.onsuccess = () => { detail = req.result as VideoDetail | undefined; };
+    }, { abortOnPageHide: true, timeoutMs: DETAIL_TRANSACTION_TIMEOUT_MS });
+    return detail;
 }
 
 export async function putDetail(pageUrl: string, detail: VideoDetail): Promise<void> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<void>();
-    const tx = db.transaction(DETAIL_STORE, 'readwrite');
-    tx.objectStore(DETAIL_STORE).put({ pageUrl, videoSrc: detail.videoSrc, actors: detail.actors });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error!);
-    return promise;
+    await useTransaction(DETAIL_STORE, 'readwrite', store => {
+        store.put({ pageUrl, videoSrc: detail.videoSrc, actors: detail.actors });
+    }, { abortOnPageHide: true, timeoutMs: DETAIL_TRANSACTION_TIMEOUT_MS });
 }
 
 // --- Favorites ---
@@ -96,20 +229,26 @@ let favsPromise: Promise<string[]> | null = null;
 let favSet: Set<string> | null = null;
 
 async function getAllFavs(): Promise<string[]> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<string[]>();
-    const req = db.transaction(FAV_STORE, 'readonly').objectStore(FAV_STORE).getAll();
-    req.onsuccess = () => {
-        const items = req.result as { id: string; savedAt: number }[];
-        items.sort((a, b) => b.savedAt - a.savedAt);
-        resolve(items.map(x => x.id));
-    };
-    req.onerror = () => reject(req.error!);
-    return promise;
+    let items: { id: string; savedAt: number }[] = [];
+    await useTransaction(FAV_STORE, 'readonly', store => {
+        const req = store.getAll();
+        req.onsuccess = () => { items = req.result as { id: string; savedAt: number }[]; };
+    });
+    items.sort((a, b) => b.savedAt - a.savedAt);
+    return items.map(item => item.id);
 }
 
 export function preloadFavs(): Promise<string[]> {
-    if (!favsPromise) favsPromise = getAllFavs().then(ids => { favSet = new Set(ids); return ids; });
+    if (!favsPromise) {
+        const promise = getAllFavs().then(ids => {
+            favSet = new Set(ids);
+            return ids;
+        });
+        favsPromise = promise;
+        void promise.catch(() => {
+            if (favsPromise === promise) favsPromise = null;
+        });
+    }
     return favsPromise;
 }
 
@@ -120,63 +259,55 @@ export async function isFav(id: string): Promise<boolean> {
 
 export async function toggleFav(id: string): Promise<boolean> {
     await preloadFavs();
-    const was = favSet!.has(id);
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<boolean>();
-    const tx = db.transaction(FAV_STORE, 'readwrite');
-    const store = tx.objectStore(FAV_STORE);
+    const wasFavorite = favSet!.has(id);
+    await useTransaction(FAV_STORE, 'readwrite', store => {
+        if (wasFavorite) store.delete(id);
+        else store.put({ id, savedAt: Date.now() });
+    });
 
-    if (was) {
-        store.delete(id);
-        tx.oncomplete = () => { favSet!.delete(id); favsPromise = Promise.resolve([...favSet!]); resolve(false); };
-    } else {
-        store.put({ id, savedAt: Date.now() });
-        tx.oncomplete = () => { favSet!.add(id); favsPromise = Promise.resolve([...favSet!]); resolve(true); };
-    }
-    tx.onerror = () => reject(tx.error!);
-    return promise;
+    if (wasFavorite) favSet!.delete(id);
+    else favSet!.add(id);
+    favsPromise = Promise.resolve([...favSet!]);
+    return !wasFavorite;
 }
 
 export async function mergeFavs(ids: string[]): Promise<number> {
     await preloadFavs();
-    const existing = favSet!;
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<number>();
-    const tx = db.transaction(FAV_STORE, 'readwrite');
-    const store = tx.objectStore(FAV_STORE);
-    let added = 0;
-    const now = Date.now();
+    const existing = new Set(favSet!);
+    const additions: string[] = [];
     for (const id of ids) {
         if (existing.has(id)) continue;
-        store.put({ id, savedAt: now });
         existing.add(id);
-        added++;
+        additions.push(id);
     }
-    tx.oncomplete = () => {
-        favsPromise = getAllFavs().then(ids2 => { favSet = new Set(ids2); return ids2; });
-        resolve(added);
-    };
-    tx.onerror = () => reject(tx.error!);
-    return promise;
+    if (additions.length === 0) return 0;
+
+    const now = Date.now();
+    await useTransaction(FAV_STORE, 'readwrite', store => {
+        for (const id of additions) store.put({ id, savedAt: now });
+    });
+    for (const id of additions) favSet!.add(id);
+    favsPromise = getAllFavs().then(savedIds => {
+        favSet = new Set(savedIds);
+        return savedIds;
+    });
+    await favsPromise;
+    return additions.length;
 }
 
 // --- Channels ---
 
 export async function getCachedChannel(actorUrl: string): Promise<{ termId: string; videoIds: string[] } | null> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<{ termId: string; videoIds: string[] } | null>();
-    const req = db.transaction('channels', 'readonly').objectStore('channels').get(actorUrl);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error!);
-    return promise;
+    let channel: { termId: string; videoIds: string[] } | null = null;
+    await useTransaction(CHANNEL_STORE, 'readonly', store => {
+        const req = store.get(actorUrl);
+        req.onsuccess = () => { channel = req.result ?? null; };
+    }, { abortOnPageHide: true });
+    return channel;
 }
 
 export async function setCachedChannel(actorUrl: string, termId: string, videoIds: string[]): Promise<void> {
-    const db = await openDB();
-    const { promise, resolve, reject } = Promise.withResolvers<void>();
-    const tx = db.transaction('channels', 'readwrite');
-    tx.objectStore('channels').put({ actorUrl, termId, videoIds });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error!);
-    return promise;
+    await useTransaction(CHANNEL_STORE, 'readwrite', store => {
+        store.put({ actorUrl, termId, videoIds });
+    }, { abortOnPageHide: true });
 }

@@ -126,16 +126,12 @@ function createPlayer(videoSrc: string): {
         status.textContent = 'Safari could not play this video. The media URL is ready for KMPlayer.';
     });
 
-    const heading = document.createElement('h1');
-    heading.className = 'ke-section-title';
-    heading.textContent = 'More from this actor';
-
     const grid = document.createElement('div');
     grid.id = 'ke-grid';
     grid.className = 'ke-grid';
     grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 
-    root.append(video, controls, status, heading, grid);
+    root.append(video, controls, status, grid);
 
     return { root, video };
 }

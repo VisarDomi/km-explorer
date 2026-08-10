@@ -1,6 +1,6 @@
 import type { Provider } from '../provider';
 import { getDetail, isFav, putDetail, toggleFav } from '../storage/db';
-import type { VideoStub } from '../types';
+import type { VideoDetail, VideoStub } from '../types';
 
 type CardClickHandler = (video: VideoStub) => void;
 interface CardResolution {
@@ -29,6 +29,13 @@ let workerGeneration = 0;
 let runningGeneration: number | null = null;
 let restartListenerInstalled = false;
 let highlightCentered = false;
+let detailCacheAvailable = true;
+
+function disableDetailCache(error: unknown): void {
+    if (!detailCacheAvailable) return;
+    detailCacheAvailable = false;
+    console.warn('IndexedDB detail cache is unavailable; continuing without it', error);
+}
 
 function readCardHighlight(): StoredCardIdentity | null {
     try {
@@ -97,11 +104,16 @@ async function runWorker(): Promise<void> {
             if (!task) continue;
 
             try {
-                const cached = await getDetail(pageUrl);
-                if (generation !== workerGeneration) return;
+                let cached: VideoDetail | undefined;
+                if (detailCacheAvailable) {
+                    try {
+                        cached = await getDetail(pageUrl);
+                    } catch (error) {
+                        if (generation !== workerGeneration) return;
+                        disableDetailCache(error);
+                    }
+                }
                 const detail = cached ?? await task.provider.fetchVideoDetail(pageUrl);
-                if (generation !== workerGeneration) return;
-                if (!cached) await putDetail(pageUrl, detail);
                 if (generation !== workerGeneration) return;
                 const resolution = {
                     videoSrc: detail.videoSrc,
@@ -109,8 +121,18 @@ async function runWorker(): Promise<void> {
                 };
                 if (!resolution.available) task.terminalResolution = resolution;
                 for (const callback of task.callbacks) callback(resolution);
+
+                // Cache persistence is disposable and must never gate card readiness.
+                if (!cached && detailCacheAvailable) {
+                    try {
+                        await putDetail(pageUrl, detail);
+                    } catch (error) {
+                        if (generation !== workerGeneration) return;
+                        disableDetailCache(error);
+                    }
+                }
             } catch (error) {
-                console.warn(`Could not cache ${pageUrl}`, error);
+                console.warn(`Could not resolve ${pageUrl}`, error);
             }
         }
     } finally {
@@ -147,6 +169,7 @@ function isAvailableVideoSource(videoSrc: string): boolean {
 
 export function restartCardCacheWorker(): void {
     workerGeneration++;
+    detailCacheAvailable = true;
     queue.length = 0;
     queued.clear();
     for (const pageUrl of tasks.keys()) queueTask(pageUrl);
@@ -156,6 +179,9 @@ export function restartCardCacheWorker(): void {
 function installRestartListener(): void {
     if (restartListenerInstalled) return;
     restartListenerInstalled = true;
+    window.addEventListener('pagehide', () => {
+        workerGeneration++;
+    });
     window.addEventListener('pageshow', event => {
         if (!event.persisted) return;
         const highlight = readCardHighlight();
