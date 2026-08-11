@@ -153,34 +153,17 @@ async function replaceNavigate(url) {
 
 async function snapshotFavorites() {
     return command(`
-        return await new Promise((resolve, reject) => {
-            const open = indexedDB.open("km-explorer");
-            open.onerror = () => reject(open.error);
-            open.onsuccess = () => {
-                const request = open.result.transaction("favorites", "readonly")
-                    .objectStore("favorites").getAll();
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
-            };
-        });
+        const key = "km-explorer-favorites-v1";
+        return { key, value: localStorage.getItem(key) };
     `);
 }
 
-async function restoreFavorites(items) {
+async function restoreFavorites(snapshot) {
     return command(`
-        const items = ${JSON.stringify(items)};
-        return await new Promise((resolve, reject) => {
-            const open = indexedDB.open("km-explorer");
-            open.onerror = () => reject(open.error);
-            open.onsuccess = () => {
-                const transaction = open.result.transaction("favorites", "readwrite");
-                const store = transaction.objectStore("favorites");
-                store.clear();
-                for (const item of items) store.put(item);
-                transaction.oncomplete = () => resolve(items.length);
-                transaction.onerror = () => reject(transaction.error);
-            };
-        });
+        const snapshot = ${JSON.stringify(snapshot)};
+        if (snapshot.value === null) localStorage.removeItem(snapshot.key);
+        else localStorage.setItem(snapshot.key, snapshot.value);
+        return true;
     `);
 }
 
@@ -194,21 +177,11 @@ async function homeSnapshot() {
             await wait(250);
         }
         const cards = [...document.querySelectorAll("#ke-grid .ke-card")];
-        const favorites = await new Promise((resolve, reject) => {
-            const open = indexedDB.open("km-explorer");
-            open.onerror = () => reject(open.error);
-            open.onsuccess = () => {
-                const request = open.result.transaction("favorites", "readonly")
-                    .objectStore("favorites").getAll();
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
-            };
-        });
-        favorites.sort((left, right) => right.savedAt - left.savedAt);
+        const favorites = JSON.parse(localStorage.getItem("km-explorer-favorites-v1") ?? "[]");
         return {
             href: location.href,
             cardIds: cards.map(card => card.dataset.videoId),
-            favoriteIds: favorites.map(item => item.id),
+            favoriteIds: favorites,
             activePage: document.querySelector(".ke-page-btn.active")?.textContent ?? null,
             paginationBars: document.querySelectorAll(".ke-pagination").length,
             numberedPages: [...document.querySelectorAll(".ke-pagination:first-of-type .ke-page-btn")]

@@ -1,5 +1,5 @@
 import type { Provider } from '../provider';
-import { mergeFavs, preloadFavs } from '../storage/db';
+import { getFavs, mergeFavs } from '../storage/favorites';
 import { getVideos } from '../core/videos';
 import { startInit, getGrid } from '../ui/shell';
 import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
@@ -19,11 +19,7 @@ function render(videos: VideoStub[], provider: Provider): void {
     }
 }
 
-function buildImportSection(
-    initialIds: string[],
-    provider: Provider,
-): void {
-    let ids = initialIds;
+function buildImportSection(provider: Provider): void {
     const panel = document.createElement('section');
     panel.className = 'ke-import-panel';
 
@@ -59,7 +55,7 @@ function buildImportSection(
 
     reveal.addEventListener('click', showEditor);
     exportButton.addEventListener('click', () => {
-        textarea.value = ids.join('\n');
+        textarea.value = getFavs().join('\n');
         showEditor();
     });
     merge.addEventListener('click', async () => {
@@ -71,12 +67,16 @@ function buildImportSection(
 
         merge.disabled = true;
         merge.textContent = 'Merging...';
-        const added = await mergeFavs(imported);
-        ids = await preloadFavs();
-        render(await getVideos(ids, provider), provider);
-        status.textContent = `Added ${added} of ${imported.length} IDs`;
-        merge.disabled = false;
-        merge.textContent = 'Merge';
+        try {
+            const added = mergeFavs(imported);
+            render(await getVideos(getFavs(), provider), provider);
+            status.textContent = `Added ${added} of ${imported.length} IDs`;
+        } catch (error) {
+            status.textContent = error instanceof Error ? error.message : String(error);
+        } finally {
+            merge.disabled = false;
+            merge.textContent = 'Merge';
+        }
     });
 
     actions.append(reveal, merge, exportButton, status);
@@ -89,11 +89,11 @@ export async function init(provider: Provider): Promise<void> {
     const grid = getGrid();
     grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 
-    const ids = await preloadFavs();
+    const ids = getFavs();
     render(await getVideos(ids, provider), provider);
     centerStoredCardHighlight();
     replacePagination(0, 0, provider, grid);
-    buildImportSection(ids, provider);
+    buildImportSection(provider);
 
     void provider.fetchListingPageCount().then(totalPages => {
         replacePagination(0, totalPages, provider, grid);

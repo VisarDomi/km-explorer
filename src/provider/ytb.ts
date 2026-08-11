@@ -132,20 +132,31 @@ async function scrapeVideoDetail(pageUrl: string): Promise<VideoDetail> {
 async function resolveTermId(actorUrl: string): Promise<string | null> {
     const slug = actorUrl.replace(/^\/actor\//, '').replace(/\/$/, '');
     const r = await fetch(`${BASE_URL}/wp-json/wp/v2/actors?slug=${encodeURIComponent(slug)}`);
-    const data = await r.json() as Array<{ id: number }>;
-    if (!Array.isArray(data) || data.length === 0) return null;
+    if (!r.ok) throw new Error(`Actor lookup failed: ${r.status}`);
+    const data = await r.json() as unknown;
+    if (!Array.isArray(data)) throw new Error('Actor lookup response is not an array');
+    if (data.length === 0) return null;
+    if (typeof data[0] !== 'object' || data[0] === null || typeof data[0].id !== 'number') {
+        throw new Error('Actor lookup response contains an invalid actor');
+    }
     return String(data[0].id);
 }
 
 async function fetchChannelVideos(termId: string, page: number): Promise<{ ids: string[]; hasMore: boolean }> {
     const r = await fetch(`${BASE_URL}/wp-json/wp/v2/posts?actors=${termId}&per_page=12&page=${page}`);
+    if (!r.ok) throw new Error(`Actor posts failed: ${r.status}`);
     const data: unknown = await r.json();
-    const posts = Array.isArray(data)
-        ? data as Array<{ id: number; link: string }>
-        : [];
+    if (!Array.isArray(data)) throw new Error('Actor posts response is not an array');
+    if (!data.every(post => typeof post === 'object' && post !== null && typeof post.id === 'number')) {
+        throw new Error('Actor posts response contains an invalid post');
+    }
+    const totalPages = Number(r.headers.get('X-WP-TotalPages'));
+    if (!Number.isInteger(totalPages) || totalPages < 0) {
+        throw new Error('Actor posts response has an invalid page count');
+    }
     return {
-        ids: posts.map(p => String(p.id)),
-        hasMore: posts.length >= 12,
+        ids: data.map(post => String(post.id)),
+        hasMore: page < totalPages,
     };
 }
 

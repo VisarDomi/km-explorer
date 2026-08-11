@@ -7,20 +7,16 @@ import { replacePagination } from '../ui/pagination';
 const SCROLL_KEY = 'ke-scroll';
 
 function saveScroll(): void {
-    try {
-        localStorage.setItem(SCROLL_KEY + location.pathname, String(window.scrollY));
-    } catch {
-        // Storage can be unavailable in private browsing.
-    }
+    localStorage.setItem(SCROLL_KEY + location.pathname, String(window.scrollY));
 }
 
 function loadScroll(): number | null {
-    try {
-        const value = localStorage.getItem(SCROLL_KEY + location.pathname);
-        return value === null ? null : Number.parseInt(value, 10);
-    } catch {
-        return null;
-    }
+    const raw = localStorage.getItem(SCROLL_KEY + location.pathname);
+    if (raw === null) return null;
+
+    const position = Number(raw);
+    if (!Number.isFinite(position) || position < 0) throw new Error('Stored scroll position is invalid');
+    return position;
 }
 
 export async function init(provider: Provider, sitePage: number): Promise<void> {

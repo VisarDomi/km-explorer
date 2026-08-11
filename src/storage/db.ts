@@ -4,7 +4,6 @@ const DB_NAME = 'km-explorer';
 const DB_VERSION = 4;
 const VIDEO_STORE = 'videos';
 const DETAIL_STORE = 'details';
-const FAV_STORE = 'favorites';
 const CHANNEL_STORE = 'channels';
 const DEFAULT_TRANSACTION_TIMEOUT_MS = 15_000;
 const DETAIL_TRANSACTION_TIMEOUT_MS = 2_000;
@@ -64,7 +63,6 @@ function openDB(): Promise<IDBDatabase> {
         const oldVersion = event.oldVersion;
 
         if (!db.objectStoreNames.contains(VIDEO_STORE)) db.createObjectStore(VIDEO_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains(FAV_STORE)) db.createObjectStore(FAV_STORE, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(CHANNEL_STORE)) db.createObjectStore(CHANNEL_STORE, { keyPath: 'actorUrl' });
 
         // v4 replaced records using video_src with records using videoSrc.
@@ -221,78 +219,6 @@ export async function putDetail(pageUrl: string, detail: VideoDetail): Promise<v
     await useTransaction(DETAIL_STORE, 'readwrite', store => {
         store.put({ pageUrl, videoSrc: detail.videoSrc, actors: detail.actors });
     }, { abortOnPageHide: true, timeoutMs: DETAIL_TRANSACTION_TIMEOUT_MS });
-}
-
-// --- Favorites ---
-
-let favsPromise: Promise<string[]> | null = null;
-let favSet: Set<string> | null = null;
-
-async function getAllFavs(): Promise<string[]> {
-    let items: { id: string; savedAt: number }[] = [];
-    await useTransaction(FAV_STORE, 'readonly', store => {
-        const req = store.getAll();
-        req.onsuccess = () => { items = req.result as { id: string; savedAt: number }[]; };
-    });
-    items.sort((a, b) => b.savedAt - a.savedAt);
-    return items.map(item => item.id);
-}
-
-export function preloadFavs(): Promise<string[]> {
-    if (!favsPromise) {
-        const promise = getAllFavs().then(ids => {
-            favSet = new Set(ids);
-            return ids;
-        });
-        favsPromise = promise;
-        void promise.catch(() => {
-            if (favsPromise === promise) favsPromise = null;
-        });
-    }
-    return favsPromise;
-}
-
-export async function isFav(id: string): Promise<boolean> {
-    await preloadFavs();
-    return favSet!.has(id);
-}
-
-export async function toggleFav(id: string): Promise<boolean> {
-    await preloadFavs();
-    const wasFavorite = favSet!.has(id);
-    await useTransaction(FAV_STORE, 'readwrite', store => {
-        if (wasFavorite) store.delete(id);
-        else store.put({ id, savedAt: Date.now() });
-    });
-
-    if (wasFavorite) favSet!.delete(id);
-    else favSet!.add(id);
-    favsPromise = Promise.resolve([...favSet!]);
-    return !wasFavorite;
-}
-
-export async function mergeFavs(ids: string[]): Promise<number> {
-    await preloadFavs();
-    const existing = new Set(favSet!);
-    const additions: string[] = [];
-    for (const id of ids) {
-        if (existing.has(id)) continue;
-        existing.add(id);
-        additions.push(id);
-    }
-    if (additions.length === 0) return 0;
-
-    const now = Date.now();
-    await useTransaction(FAV_STORE, 'readwrite', store => {
-        for (const id of additions) store.put({ id, savedAt: now });
-    });
-    for (const id of additions) favSet!.add(id);
-    favsPromise = getAllFavs().then(savedIds => {
-        favSet = new Set(savedIds);
-        return savedIds;
-    });
-    await favsPromise;
-    return additions.length;
 }
 
 // --- Channels ---

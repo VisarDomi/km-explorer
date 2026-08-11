@@ -130,6 +130,19 @@ body {
     z-index: 3;
 }
 
+.ke-failed-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.72);
+    color: #ff8a8a;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 3;
+}
+
 .ke-fav-toggle {
     position: absolute;
     top: 4px;

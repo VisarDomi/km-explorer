@@ -1,12 +1,13 @@
 import type { Provider } from '../provider';
-import { getDetail, isFav, putDetail, toggleFav } from '../storage/db';
+import { getDetail, putDetail } from '../storage/db';
+import { isFav, toggleFav } from '../storage/favorites';
 import type { VideoDetail, VideoStub } from '../types';
 
 type CardClickHandler = (video: VideoStub) => void;
-interface CardResolution {
-    videoSrc: string;
-    available: boolean;
-}
+type CardResolution =
+    | { state: 'ready'; videoSrc: string }
+    | { state: 'unavailable' }
+    | { state: 'failed'; message: string };
 type ReadyCallback = (resolution: CardResolution) => void;
 
 interface CacheTask {
@@ -38,27 +39,23 @@ function disableDetailCache(error: unknown): void {
 }
 
 function readCardHighlight(): StoredCardIdentity | null {
-    try {
-        const value = JSON.parse(localStorage.getItem(CARD_HIGHLIGHT_KEY) ?? 'null') as StoredCardIdentity | null;
-        return value
-            && typeof value.id === 'string'
-            && typeof value.pageUrl === 'string'
-            ? value
-            : null;
-    } catch {
-        return null;
+    const raw = localStorage.getItem(CARD_HIGHLIGHT_KEY);
+    if (raw === null) return null;
+
+    const value = JSON.parse(raw) as unknown;
+    if (typeof value !== 'object' || value === null) throw new Error('Stored card highlight is not an object');
+    const identity = value as Partial<StoredCardIdentity>;
+    if (typeof identity.id !== 'string' || typeof identity.pageUrl !== 'string') {
+        throw new Error('Stored card highlight is invalid');
     }
+    return identity as StoredCardIdentity;
 }
 
 function writeCardHighlight(video: VideoStub): void {
-    try {
-        localStorage.setItem(CARD_HIGHLIGHT_KEY, JSON.stringify({
-            id: video.id,
-            pageUrl: video.pageUrl,
-        } satisfies StoredCardIdentity));
-    } catch {
-        // Storage can be unavailable in private browsing.
-    }
+    localStorage.setItem(CARD_HIGHLIGHT_KEY, JSON.stringify({
+        id: video.id,
+        pageUrl: video.pageUrl,
+    } satisfies StoredCardIdentity));
 }
 
 function cardMatchesHighlight(card: HTMLElement, highlight: StoredCardIdentity | null): boolean {
@@ -115,11 +112,10 @@ async function runWorker(): Promise<void> {
                 }
                 const detail = cached ?? await task.provider.fetchVideoDetail(pageUrl);
                 if (generation !== workerGeneration) return;
-                const resolution = {
-                    videoSrc: detail.videoSrc,
-                    available: isAvailableVideoSource(detail.videoSrc),
-                };
-                if (!resolution.available) task.terminalResolution = resolution;
+                const resolution: CardResolution = isAvailableVideoSource(detail.videoSrc)
+                    ? { state: 'ready', videoSrc: detail.videoSrc }
+                    : { state: 'unavailable' };
+                if (resolution.state === 'unavailable') task.terminalResolution = resolution;
                 for (const callback of task.callbacks) callback(resolution);
 
                 // Cache persistence is disposable and must never gate card readiness.
@@ -133,6 +129,12 @@ async function runWorker(): Promise<void> {
                 }
             } catch (error) {
                 console.warn(`Could not resolve ${pageUrl}`, error);
+                if (generation !== workerGeneration) return;
+                const resolution: CardResolution = {
+                    state: 'failed',
+                    message: error instanceof Error ? error.message : String(error),
+                };
+                for (const callback of task.callbacks) callback(resolution);
             }
         }
     } finally {
@@ -228,36 +230,53 @@ export function createVideoCard(
     copied.textContent = 'Copied';
     card.appendChild(copied);
 
+    const failed = document.createElement('div');
+    failed.className = 'ke-failed-overlay';
+    failed.textContent = 'Failed to load';
+    card.appendChild(failed);
+
     const favorite = document.createElement('button');
     favorite.className = 'ke-fav-toggle';
     favorite.textContent = '\u2661';
-    favorite.addEventListener('click', async event => {
+    favorite.addEventListener('click', event => {
         event.stopPropagation();
-        const nowFavorite = await toggleFav(video.id);
+        const nowFavorite = toggleFav(video.id);
         favorite.textContent = nowFavorite ? '\u2764' : '\u2661';
         favorite.classList.toggle('active', nowFavorite);
     });
-    void isFav(video.id).then(isFavorite => {
-        favorite.textContent = isFavorite ? '\u2764' : '\u2661';
-        favorite.classList.toggle('active', isFavorite);
-    });
+    const isFavorite = isFav(video.id);
+    favorite.textContent = isFavorite ? '\u2764' : '\u2661';
+    favorite.classList.toggle('active', isFavorite);
     card.appendChild(favorite);
 
     let ready = false;
     let checked = false;
-    const markChecked = ({ videoSrc, available }: CardResolution): void => {
+    const markChecked = (resolution: CardResolution): void => {
+        if (resolution.state === 'failed') {
+            ready = false;
+            card.classList.add('ke-failed');
+            card.setAttribute('aria-disabled', 'true');
+            failed.title = resolution.message;
+            failed.style.display = 'flex';
+            syncCardHighlight(card);
+            return;
+        }
         if (checked) return;
         checked = true;
         card.setAttribute('data-video-checked', 'true');
-        if (!available) {
+        card.classList.remove('ke-failed');
+        failed.style.display = 'none';
+        if (resolution.state === 'unavailable') {
             card.classList.add('ke-unavailable');
             card.setAttribute('data-video-unavailable', 'true');
             card.setAttribute('aria-disabled', 'true');
             return;
         }
         ready = true;
-        card.setAttribute('data-video-src', videoSrc);
+        if (!disabled) card.removeAttribute('aria-disabled');
+        card.setAttribute('data-video-src', resolution.videoSrc);
         card.style.opacity = '1';
+        syncCardHighlight(card);
     };
 
     card.addEventListener('click', async () => {
