@@ -5,6 +5,7 @@ import { startInit, getGrid } from '../ui/shell';
 import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
 import { replacePagination } from '../ui/pagination';
 import type { VideoStub } from '../types';
+import { startHomeBackup } from '../core/home-backup';
 
 function render(videos: VideoStub[], provider: Provider): void {
     const grid = getGrid();
@@ -54,8 +55,8 @@ function buildImportSection(provider: Provider): void {
     };
 
     reveal.addEventListener('click', showEditor);
-    exportButton.addEventListener('click', () => {
-        textarea.value = getFavs().join('\n');
+    exportButton.addEventListener('click', async () => {
+        textarea.value = (await getFavs()).join('\n');
         showEditor();
     });
     merge.addEventListener('click', async () => {
@@ -68,8 +69,8 @@ function buildImportSection(provider: Provider): void {
         merge.disabled = true;
         merge.textContent = 'Merging...';
         try {
-            const added = mergeFavs(imported);
-            render(await getVideos(getFavs(), provider), provider);
+            const added = await mergeFavs(imported);
+            render(await getVideos(await getFavs(), provider), provider);
             status.textContent = `Added ${added} of ${imported.length} IDs`;
         } catch (error) {
             status.textContent = error instanceof Error ? error.message : String(error);
@@ -85,13 +86,22 @@ function buildImportSection(provider: Provider): void {
 }
 
 export async function init(provider: Provider): Promise<void> {
-    startInit();
+    await startInit();
     const grid = getGrid();
     grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 
-    const ids = getFavs();
-    render(await getVideos(ids, provider), provider);
-    centerStoredCardHighlight();
+    let generation = 0;
+    const refresh = async () => {
+        const current = ++generation;
+        const videos = await getVideos(await getFavs(), provider);
+        if (generation !== current) return;
+        render(videos, provider);
+        centerStoredCardHighlight();
+    };
+    window.addEventListener('reader-data-restored', () => { void refresh(); });
+    // Home UI/storage is ready; provider requests do not gate PC setup.
+    startHomeBackup();
+    await refresh();
     replacePagination(0, 0, provider, grid);
     buildImportSection(provider);
 

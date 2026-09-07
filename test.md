@@ -1,52 +1,57 @@
-# iOS Safari regression tests
+# Behavior checks and phone backup
 
-The frozen product contract and provider URLs are defined in
-[`test.txt`](test.txt). The suite builds and injects the current km-explorer
-bundle on a real iPhone, then exercises Favorites, provider/client pagination,
-card readiness, real video routes, playback UI, actor-video replacement
-navigation, bfcache restoration, and IndexedDB-backed cache restart.
+`test.txt` is unchanged. The previous media/navigation contract remains there.
 
-Install dependencies once:
+## Isolated tests
 
-```bash
-npm install
-```
+Run `npx tsc --noEmit 2>&1`, `npm run build`, then `npm run tests`.
+These use disposable Chromium profiles and a disposable real PC backup store;
+no live phone or personal backup files are modified.
 
-Enable the universal `userscript-ios-test` debugger on the phone and disable
-other installed copies of km-explorer. Before starting, foreground
-`https://example.com/` in Safari and keep the phone unlocked.
+- Upgrade a seeded v4 database without losing any of its three caches.
+- Migrate favorites, selected card and scroll from legacy localStorage.
+- Prohibit main-thread IndexedDB, then prohibit localStorage on later loads.
+- Keep both fresh and enrolled phones quiet when PC connections are refused.
+- Confirm initial backup, silently save later favorite edits, preserve previous.
+- Restore a previous snapshot into a new identity without changing its source.
+- Reload the restored phone and verify favorite cards/cache readiness.
+- Force a real DataCloneError after restore has started clearing/replacing stores:
+  all four stores roll back. Invalid snapshots and repeated migration preserve data.
 
-Run the small connectivity and rendering path first:
+The old `tests/ios/run.mjs` is intentionally guarded before connection: its
+localStorage snapshots can no longer restore authoritative v5 state. Its media
+fixture cases remain available for a future port, but it must not mutate a live
+phone under the old restoration assumptions.
 
-```bash
-npm run tests:smoke
-```
+## Authorized live migration and backup
 
-Run the complete safe suite with:
-
-```bash
-npm run tests
-```
-
-Equivalent common selectors are:
+Disable KM Explorer in the userscript manager, leave only the universal debugger
+enabled, and keep Safari unlocked/foregrounded on example.com. Then:
 
 ```bash
-npm run tests -- --test smoke --site ytboob
-npm run tests -- --test full --site ytboob
+npm run phone:backup
 ```
 
-The runner:
+The runner reads baseline data in a temporary worker, injects the production
+build, chooses **Back up this phone**, and checks the private PC file against the
+phone. It does not toggle favorites, choose Restore, clear data, or modify legacy
+localStorage. It also checks home cards and a real reload. Worker audits return
+hashes/counts and cache keys, not full cached metadata. Cleanup returns Safari
+to example.com and shuts down the shared bridge.
 
-- type-checks with `npx tsc --noEmit`;
-- builds with `npx vite build` without incrementing the production version;
-- injects the freshly built bundle after each real navigation or reload;
-- uses the live provider read-only except for one Favorite toggle that is
-  immediately reversed and backed by full Favorites snapshot restoration;
-- uses unique deterministic fixture records for the bfcache cache-restart
-  check and removes them afterward;
-- reports requirement-oriented `PASS`, `FAIL`, and `SKIP` results;
-- returns Safari to exactly `https://example.com/` even after failure.
+The phone runner is an explicit backup operation, not the default test suite.
+Do not run multiple phone controllers on port 37777 at the same time.
 
-Synthetic card clicks can prove that the app attempts to copy the correct media
-URL, but Safari only grants the real clipboard write to a physical trusted tap.
-The trusted-tap behavior remains a manual iPhone check.
+## Actual Safari result — 2026-09-07
+
+- 503 favorites, 21 scroll positions, selected card: unchanged.
+- 12,633 videos, 4,966 details, 105 channels: preserved through v4 → v5.
+- Every saved cache record matched the phone, as did personal-data hashes.
+- All 503 cards ready, with decoded thumbnails.
+- Reload: same identity and preferences, zero backup notifications.
+- Profile: **iPhone before iOS downgrade**.
+- Phone data was backed up, not restored over. Legacy keys remain untouched.
+
+Debugger injection does not install or enable the build permanently. Install
+`dist/km-explorer.user.js` before re-enabling KM Explorer. After formatting,
+reinstall/trust the PC certificate and choose Restore from PC on the home page.

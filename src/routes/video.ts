@@ -178,7 +178,7 @@ function renderActorGrid(
 }
 
 export async function init(provider: Provider, videoUrl: string): Promise<void> {
-    startInit();
+    await startInit();
     const detail = await loadDetail(provider, videoUrl);
     const actor = detail.actors[0];
     if (!actor) {

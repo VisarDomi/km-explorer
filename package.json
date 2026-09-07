@@ -1,12 +1,12 @@
 {
   "name": "km-explorer",
-  "version": "86",
+  "version": "88",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node increase.js && vite build",
-    "tests": "node tests/ios/run.mjs",
-    "tests:smoke": "node tests/ios/run.mjs --test smoke"
+    "build": "node scripts/build.mjs",
+    "tests": "node tests/browser/atomic-restore.mjs && node tests/browser/backup.mjs",
+    "phone:backup": "node tests/ios/backup.mjs --backup"
   },
   "devDependencies": {
     "@types/tampermonkey": "^5.0.4",

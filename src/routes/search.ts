@@ -3,24 +3,18 @@ import { getAllVideos, putVideos } from '../storage/db';
 import { getGrid, startInit } from '../ui/shell';
 import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
 import { replacePagination } from '../ui/pagination';
-
-const SCROLL_KEY = 'ke-scroll';
+import { compute } from '../core/compute/transport';
 
 function saveScroll(): void {
-    localStorage.setItem(SCROLL_KEY + location.pathname, String(window.scrollY));
+    void compute('scroll-save', location.pathname, Math.max(0, window.scrollY)).catch(console.error);
 }
 
-function loadScroll(): number | null {
-    const raw = localStorage.getItem(SCROLL_KEY + location.pathname);
-    if (raw === null) return null;
-
-    const position = Number(raw);
-    if (!Number.isFinite(position) || position < 0) throw new Error('Stored scroll position is invalid');
-    return position;
+function loadScroll(): Promise<number | null> {
+    return compute('scroll', location.pathname);
 }
 
 export async function init(provider: Provider, sitePage: number): Promise<void> {
-    startInit();
+    await startInit();
 
     const clientPage = provider.clientPageForSitePage(sitePage);
     const targetIndex = provider.indexForSitePage(sitePage, clientPage);
@@ -43,7 +37,7 @@ export async function init(provider: Provider, sitePage: number): Promise<void> 
     replacePagination(clientPage, result.totalClientPages, provider, grid);
     centerStoredCardHighlight();
 
-    const savedY = loadScroll();
+    const savedY = await loadScroll();
     if (savedY !== null) {
         requestAnimationFrame(() => window.scrollTo(0, savedY));
     } else {

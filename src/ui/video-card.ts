@@ -2,6 +2,7 @@ import type { Provider } from '../provider';
 import { getDetail, putDetail } from '../storage/db';
 import { isFav, toggleFav } from '../storage/favorites';
 import type { VideoDetail, VideoStub } from '../types';
+import { compute } from '../core/compute/transport';
 
 type CardClickHandler = (video: VideoStub) => void;
 type CardResolution =
@@ -21,7 +22,7 @@ interface StoredCardIdentity {
     pageUrl: string;
 }
 
-const CARD_HIGHLIGHT_KEY = 'ke-card-highlight';
+let highlightRead: Promise<StoredCardIdentity | null> | undefined;
 
 const tasks = new Map<string, CacheTask>();
 const queue: string[] = [];
@@ -38,24 +39,14 @@ function disableDetailCache(error: unknown): void {
     console.warn('IndexedDB detail cache is unavailable; continuing without it', error);
 }
 
-function readCardHighlight(): StoredCardIdentity | null {
-    const raw = localStorage.getItem(CARD_HIGHLIGHT_KEY);
-    if (raw === null) return null;
-
-    const value = JSON.parse(raw) as unknown;
-    if (typeof value !== 'object' || value === null) throw new Error('Stored card highlight is not an object');
-    const identity = value as Partial<StoredCardIdentity>;
-    if (typeof identity.id !== 'string' || typeof identity.pageUrl !== 'string') {
-        throw new Error('Stored card highlight is invalid');
-    }
-    return identity as StoredCardIdentity;
+function readCardHighlight(): Promise<StoredCardIdentity | null> {
+    return highlightRead ??= compute('highlight');
 }
 
-function writeCardHighlight(video: VideoStub): void {
-    localStorage.setItem(CARD_HIGHLIGHT_KEY, JSON.stringify({
-        id: video.id,
-        pageUrl: video.pageUrl,
-    } satisfies StoredCardIdentity));
+async function writeCardHighlight(video: VideoStub): Promise<void> {
+    const value = { id: video.id, pageUrl: video.pageUrl };
+    await compute('highlight-save', value);
+    highlightRead = Promise.resolve(value);
 }
 
 function cardMatchesHighlight(card: HTMLElement, highlight: StoredCardIdentity | null): boolean {
@@ -65,8 +56,12 @@ function cardMatchesHighlight(card: HTMLElement, highlight: StoredCardIdentity |
         && card.getAttribute('aria-disabled') !== 'true';
 }
 
-function syncCardHighlight(card: HTMLElement, highlight = readCardHighlight()): void {
-    card.classList.toggle('ke-returned-card', cardMatchesHighlight(card, highlight));
+function syncCardHighlight(card: HTMLElement, highlight?: StoredCardIdentity | null): void {
+    if (highlight !== undefined) card.classList.toggle('ke-returned-card', cardMatchesHighlight(card, highlight));
+    else void readCardHighlight().then(value => {
+        card.classList.toggle('ke-returned-card', cardMatchesHighlight(card, value));
+        centerStoredCardHighlight();
+    }).catch(console.error);
 }
 
 export function centerStoredCardHighlight(): void {
@@ -184,9 +179,16 @@ function installRestartListener(): void {
     window.addEventListener('pagehide', () => {
         workerGeneration++;
     });
-    window.addEventListener('pageshow', event => {
+    window.addEventListener('reader-data-restored', () => {
+        highlightRead = undefined;
+        highlightCentered = false;
+        workerGeneration++;
+        tasks.clear(); queue.length = 0; queued.clear();
+    });
+    window.addEventListener('pageshow', async event => {
         if (!event.persisted) return;
-        const highlight = readCardHighlight();
+        highlightRead = undefined;
+        const highlight = await readCardHighlight();
         document.querySelectorAll<HTMLElement>('.ke-card').forEach(card => {
             card.removeAttribute('data-card-busy');
             const spinner = card.querySelector<HTMLElement>('.ke-spinner-overlay');
@@ -238,15 +240,22 @@ export function createVideoCard(
     const favorite = document.createElement('button');
     favorite.className = 'ke-fav-toggle';
     favorite.textContent = '\u2661';
-    favorite.addEventListener('click', event => {
+    favorite.disabled = true;
+    favorite.addEventListener('click', async event => {
         event.stopPropagation();
-        const nowFavorite = toggleFav(video.id);
-        favorite.textContent = nowFavorite ? '\u2764' : '\u2661';
-        favorite.classList.toggle('active', nowFavorite);
+        favorite.disabled = true;
+        try {
+            const nowFavorite = await toggleFav(video.id);
+            favorite.textContent = nowFavorite ? '\u2764' : '\u2661';
+            favorite.classList.toggle('active', nowFavorite);
+        } catch (error) { favorite.title = String(error); console.error(error); }
+        finally { favorite.disabled = false; }
     });
-    const isFavorite = isFav(video.id);
-    favorite.textContent = isFavorite ? '\u2764' : '\u2661';
-    favorite.classList.toggle('active', isFavorite);
+    void isFav(video.id).then(isFavorite => {
+        favorite.textContent = isFavorite ? '\u2764' : '\u2661';
+        favorite.classList.toggle('active', isFavorite);
+        favorite.disabled = false;
+    }).catch(error => { favorite.title = String(error); console.error(error); });
     card.appendChild(favorite);
 
     let ready = false;
@@ -282,17 +291,21 @@ export function createVideoCard(
     card.addEventListener('click', async () => {
         if (disabled || !ready || card.hasAttribute('data-card-busy')) return;
         card.setAttribute('data-card-busy', 'true');
-        writeCardHighlight(video);
         spinner.style.display = 'flex';
         const videoSrc = card.getAttribute('data-video-src');
         try {
-            if (videoSrc) await navigator.clipboard.writeText(videoSrc);
-        } catch (error) {
-            console.warn('Could not copy media URL', error);
-        } finally {
-            spinner.style.display = 'none';
+            // Invoke clipboard while the click still has user activation; persist before navigation.
+            await Promise.all([
+                writeCardHighlight(video),
+                videoSrc ? navigator.clipboard.writeText(videoSrc).catch(error => console.warn('Could not copy media URL', error)) : Promise.resolve(),
+            ]);
             copied.style.display = 'flex';
             onClick(video);
+        } catch (error) {
+            card.removeAttribute('data-card-busy');
+            console.error('Could not save selected card', error);
+        } finally {
+            spinner.style.display = 'none';
         }
     });
 

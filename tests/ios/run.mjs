@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// v4 runner snapshots localStorage, which is no longer authoritative after migration.
+// Refuse before connecting or changing live phone data; retained for its media test cases.
+throw new Error('Legacy localStorage-mutating suite is retired. Use npm run tests or npm run phone:backup; see test.md.');
+
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {

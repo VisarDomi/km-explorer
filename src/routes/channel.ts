@@ -18,7 +18,7 @@ function render(videos: VideoStub[], provider: Provider): void {
 }
 
 export async function init(provider: Provider, actorUrl: string): Promise<void> {
-    startInit();
+    await startInit();
     const grid = getGrid();
     grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 

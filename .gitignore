@@ -6,5 +6,6 @@ dist/
 .idea/
 .claude/
 .env
+.env.local
 package-lock.json
 favs.txt
