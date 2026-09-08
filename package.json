@@ -1,11 +1,12 @@
 {
   "name": "km-explorer",
-  "version": "88",
+  "version": "91",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "tests": "node tests/browser/atomic-restore.mjs && node tests/browser/backup.mjs",
+    "build:extension": "node scripts/build-extension.mjs",
+    "tests": "node tests/browser/atomic-restore.mjs && node tests/browser/backup.mjs && node tests/browser/video-flow.mjs",
     "phone:backup": "node tests/ios/backup.mjs --backup"
   },
   "devDependencies": {

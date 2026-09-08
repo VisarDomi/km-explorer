@@ -1,4 +1,5 @@
 import type { Provider } from '../provider';
+import { navigate } from '../ui/navigation';
 import { getAllVideos, putVideos } from '../storage/db';
 import { getGrid, startInit } from '../ui/shell';
 import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
@@ -29,8 +30,8 @@ export async function init(provider: Provider, sitePage: number): Promise<void> 
     grid.innerHTML = '';
     result.videos.forEach((video, index) => {
         const card = createVideoCard(video, selected => {
-            window.location.href = selected.pageUrl;
-        }, provider);
+            navigate(selected.pageUrl);
+        });
         card.id = `ke-${index}`;
         grid.appendChild(card);
     });
@@ -44,8 +45,6 @@ export async function init(provider: Provider, sitePage: number): Promise<void> 
         document.getElementById(`ke-${targetIndex}`)?.scrollIntoView();
     }
 
-    window.addEventListener('scrollend', () => {
-        setTimeout(saveScroll, 100);
-    });
+    window.addEventListener('scrollend', saveScroll);
     window.addEventListener('pagehide', saveScroll);
 }

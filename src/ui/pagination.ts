@@ -1,4 +1,5 @@
 import type { Provider } from '../provider';
+import { navigate } from './navigation';
 
 export function createPagination(
     activePage: number,
@@ -15,7 +16,7 @@ export function createPagination(
     favorites.setAttribute('aria-label', 'Favorites');
     favorites.classList.toggle('active', activePage === 0);
     favorites.addEventListener('click', () => {
-        window.location.href = '/';
+        navigate('/');
     });
     bar.appendChild(favorites);
 
@@ -25,7 +26,7 @@ export function createPagination(
         button.classList.toggle('active', page === activePage);
         button.textContent = String(page);
         button.addEventListener('click', () => {
-            window.location.href = `/page/${provider.sitePageForClientPage(page)}/`;
+            navigate(`/page/${provider.sitePageForClientPage(page)}/`);
         });
         bar.appendChild(button);
     }

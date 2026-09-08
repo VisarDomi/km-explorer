@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from '../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
 import { BackupStore } from '../../../../manga/gallery-downloader/gallery-server/downloader/dist/reader-backups.js';
-const bundle = fs.readFileSync('dist/km-explorer.user.js','utf8');
+// The same behavioral cases also exercise the independently compiled extension.
+// Injection here is a storage regression fixture, not a Safari startup test.
+const bundle = fs.readFileSync(process.env.KM_TEST_BUNDLE || 'dist/km-explorer.user.js','utf8');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(),'km-backup-test-'));
 const store = new BackupStore(dir);
 const videos = [1,2].map(id=>({id:String(id),thumbnail:`https://ytboob.com/${id}.jpg`,pageUrl:`https://ytboob.com/video-${id}/`}));
@@ -64,7 +66,7 @@ try {
     }
     offline=true;
     const original=await phone(true);
-    await until(async()=>await original.page.locator('.ke-card[data-video-checked]').count()===2);
+    await until(async()=>await original.page.locator('.ke-card .ke-fav-toggle:enabled').count()===2);
     await until(()=>attempts>0);
     await new Promise(resolve=>setTimeout(resolve,500));
     assert.equal(await original.page.locator('#reader-backup-status,#reader-backup-setup').count(),0);
@@ -95,12 +97,12 @@ try {
     await dialog.getByRole('combobox').selectOption(first.id+':previous');
     await dialog.getByRole('button',{name:'Restore from PC',exact:true}).click();
     await until(()=>store.list('km-explorer','ytboob').length===2);
-    await until(async()=>await copy.page.locator('.ke-card[data-video-checked]').count()===2);
+    await until(async()=>await copy.page.locator('.ke-card .ke-fav-toggle:enabled').count()===2);
     const restored=store.list('km-explorer','ytboob').find(b=>b.id!==first.id);
     assert.deepEqual(restored.current.data,first.current.data);
     assert.deepEqual(store.read('km-explorer','ytboob',first.id),second);
     await copy.page.reload();await inject(copy.page,true);
-    await until(async()=>await copy.page.locator('.ke-card[data-video-checked]').count()===2);
+    await until(async()=>await copy.page.locator('.ke-card .ke-fav-toggle:enabled').count()===2);
     assert.equal(await copy.page.locator('#reader-backup-status,#reader-backup-setup').count(),0);
     await original.context.close();await copy.context.close();
     console.log('PASS: v4 caches + legacy favorites/highlight/scroll survive worker migration; offline fresh/enrolled phones stay quiet; edits persist; previous snapshot restores all stores into an independent ID; reload needs no localStorage.');

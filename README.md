@@ -10,6 +10,48 @@ UX of site itself is not good enough
 
 Cache the urls in indexeddb so that navigation is faster
 
+## Thumbnail → video → optional Copy
+
+Thumbnails navigate immediately. They do not resolve video sources, scan related
+pages, copy URLs, or wait for a cache/clipboard readiness state. Favorites and
+selected-card highlighting remain; the small highlight write is queued without
+blocking navigation. No thumbnail spinner or “Copied” overlay remains.
+
+The destination video route reads its own cached detail or fetches that page's
+source when absent. A disposable cache write does not delay playback. Actor
+metadata is optional for playback, and related thumbnails do not prefetch details.
+There is no automatic clipboard write. Only a media error reveals a **Copy**
+button over the video. A real tap copies the resolved URL; success says **Copied**,
+rejection says **Copy failed — tap to retry**. Working playback has no copy UI.
+If there is no source URL to copy, the page reports that instead of claiming success.
+
+Listings use native document/link navigation so Safari retains history and can
+restore bfcache even if the takeover stopped the original document while loading.
+Related-video selections retain the existing `location.replace()` behavior:
+Back goes directly to the originating listing, not through every related video.
+No custom Back control, pushState router, or synthetic history entries are added.
+
+## Safari extension
+
+`npm run build:extension` builds the same routes, UI, worker and backup logic from
+`extension/main.ts`. `src/main.ts` stays the userscript entry point. Unsupported
+routes do nothing; recognized routes take over before initializing storage.
+The extension uses MAIN-world, top-frame `document_start` on `ytboob.com` only.
+It guards repeated injection and stops/replaces the original DOM instead of
+Safari's recursively reinjecting document.open/close sequence. It owns the mobile
+viewport. This is not a guarantee that zero original website bytes/scripts run.
+
+The iOS host lives in `../../manga/gallery-reader/extension/apple/`. Run
+`npm run build:extensions` there to stage both independent bundles, then build
+the existing iOS host. Its name is **Reader Extensions**, containing Gallery Reader
+and KM Explorer as separate Safari extensions. KM's bundle identifier is
+`com.visar.galleryreader.extensiontest.KMExplorer`. Enable KM and allow ytboob.com
+in Safari settings; disable its Userscripts version. Existing origin IndexedDB
+and backup identity are shared, not copied or reset. No clipboard extension
+permission is needed: Copy is a real user gesture on the failed video.
+
+Private `dist/extension` contains the PC backup key. Do not publish it.
+
 ## Conditional PC backups
 
 The favorites home at `https://ytboob.com/` uses the existing HTTPS backup service
@@ -32,6 +74,7 @@ contain downloaded video media, cookies, or unrelated website storage.
 
 `main.ts` still only recognizes/routes the page. On supported routes, takeover
 runs stop/open/close first, paints loading UI, then initializes a lazy worker.
+The Safari extension substitutes stop/DOM replacement as described above.
 IndexedDB reads/writes, backup JSON processing and PC networking run in that worker.
 The existing provider/UI flow is otherwise retained; this is not a provider rewrite.
 

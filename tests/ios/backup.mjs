@@ -65,7 +65,9 @@ async function inject(){
 }
 try{
     await session.connect({allowedHosts:['ytboob.com']});
-    console.log('Preflight',await command('return {href:location.href,visible:document.visibilityState};'));
+    const preflight=await command('return {href:location.href,visible:document.visibilityState,extensionActive:!!window.__kmExtensionBoot};');
+    assert.equal(preflight.extensionActive,false,'Disable the KM Safari extension before injecting the userscript backup test');
+    console.log('Preflight',preflight);
     await session.navigate('https://ytboob.com/');
     const before=await audit();
     console.log('Before migration',before.counts);
@@ -102,12 +104,12 @@ try{
     console.log('VERIFIED PC backup',{id:saved.id,counts:after.counts,personalDataUnchanged:true,legacyUntouched:true,allPreexistingCachesPreserved:true,allSavedRecordsMatchPhone:true});
     const ui=await command(`
         for(let i=0;i<100;i++){
-            if(document.querySelector('.ke-card[data-video-checked],.ke-empty'))break;
+            if(document.querySelector('.ke-card .ke-fav-toggle:enabled,.ke-empty'))break;
             await new Promise(resolve=>setTimeout(resolve,200));
         }
-        return {cards:document.querySelectorAll('.ke-card').length,ready:document.querySelectorAll('.ke-card[data-video-checked]').length,images:[...document.images].filter(img=>img.naturalWidth>0).length,empty:!!document.querySelector('.ke-empty')};
+        return {cards:document.querySelectorAll('.ke-card').length,favoriteControls:document.querySelectorAll('.ke-card .ke-fav-toggle:enabled').length,images:[...document.images].filter(img=>img.naturalWidth>0).length,empty:!!document.querySelector('.ke-empty')};
     `);
-    assert.ok(ui.ready||ui.empty,'Home did not become usable');
+    assert.ok(ui.favoriteControls||ui.empty,'Home did not become usable');
     console.log('Home UI',ui);
     await session.reload('https://ytboob.com/');await inject();
     await sleep(2000);

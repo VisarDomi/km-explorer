@@ -14,10 +14,13 @@ function sameProviderPage(left: string, right: string): boolean {
 }
 
 async function loadDetail(provider: Provider, videoUrl: string): Promise<VideoDetail> {
-    const cached = await getDetail(videoUrl);
+    const cached = await getDetail(videoUrl).catch(error => {
+        console.warn('Could not read detail cache', error);
+        return undefined;
+    });
     if (cached) return cached;
     const detail = await provider.fetchVideoDetail(videoUrl);
-    await putDetail(videoUrl, detail);
+    void putDetail(videoUrl, detail).catch(error => console.warn('Could not save detail cache', error));
     return detail;
 }
 
@@ -37,6 +40,28 @@ function createPlayer(videoSrc: string): {
     video.controls = false;
     video.preload = 'auto';
     addVideoScrubbing(video);
+
+    const frame = document.createElement('div');
+    frame.className = 'ke-video-frame';
+    const copy = document.createElement('button');
+    copy.className = 'ke-video-copy';
+    copy.textContent = 'Copy';
+    copy.setAttribute('aria-label', 'Copy video URL');
+    copy.hidden = true;
+    copy.addEventListener('click', async () => {
+        copy.disabled = true;
+        try {
+            // The destination owns the resolved source. This real tap grants
+            // Safari clipboard access; navigation never tries to copy.
+            await navigator.clipboard.writeText(videoSrc);
+            copy.textContent = 'Copied';
+        } catch {
+            copy.textContent = 'Copy failed — tap to retry';
+        } finally { copy.disabled = false; }
+    });
+    video.addEventListener('error', () => { copy.hidden = false; });
+    video.addEventListener('playing', () => { copy.hidden = true; });
+    frame.append(video, copy);
 
     const controls = document.createElement('div');
     controls.className = 'ke-video-controls';
@@ -120,18 +145,12 @@ function createPlayer(videoSrc: string): {
     buttons.append(play, mute);
     controls.append(time, progress, buttons);
 
-    const status = document.createElement('div');
-    status.className = 'ke-video-status';
-    video.addEventListener('error', () => {
-        status.textContent = 'Safari could not play this video. The media URL is ready for KMPlayer.';
-    });
-
     const grid = document.createElement('div');
     grid.id = 'ke-grid';
     grid.className = 'ke-grid';
     grid.innerHTML = '<div class="ke-loading">Loading...</div>';
 
-    root.append(video, controls, status, grid);
+    root.append(frame, controls, grid);
 
     return { root, video };
 }
@@ -155,7 +174,6 @@ function formatTime(seconds: number): string {
 function renderActorGrid(
     videos: VideoStub[],
     selectedUrl: string,
-    provider: Provider,
 ): void {
     const grid = document.getElementById('ke-grid');
     if (!grid) return;
@@ -165,7 +183,7 @@ function renderActorGrid(
         const selected = sameProviderPage(video.pageUrl, selectedUrl);
         const card = createVideoCard(video, selected => {
             window.location.replace(selected.pageUrl);
-        }, provider, { disabled: selected });
+        }, { disabled: selected });
         if (selected) {
             card.classList.add('selected');
         }
@@ -179,12 +197,17 @@ function renderActorGrid(
 
 export async function init(provider: Provider, videoUrl: string): Promise<void> {
     await startInit();
-    const detail = await loadDetail(provider, videoUrl);
-    const actor = detail.actors[0];
-    if (!actor) {
-        document.body.innerHTML = '<div class="ke-empty">No actor found for this video</div>';
+    let detail: VideoDetail;
+    try { detail = await loadDetail(provider, videoUrl); }
+    catch {
+        document.body.textContent = 'Could not load this video’s source. Reload to retry.';
         return;
     }
+    if (!detail.videoSrc) {
+        document.body.textContent = 'No video source is available.';
+        return;
+    }
+    const actor = detail.actors[0];
 
     const player = createPlayer(detail.videoSrc);
     document.body.appendChild(player.root);
@@ -192,11 +215,16 @@ export async function init(provider: Provider, videoUrl: string): Promise<void> 
         // The controls remain available when autoplay is rejected.
     });
 
+    if (!actor) {
+        player.root.querySelector('#ke-grid')?.remove();
+        return;
+    }
+
     const cached = await getCachedActorVideos(provider, actor.url);
     if (cached) {
-        renderActorGrid(cached, videoUrl, provider);
+        renderActorGrid(cached, videoUrl);
     }
 
     const fresh = await fetchActorVideos(provider, actor.url);
-    renderActorGrid(fresh, videoUrl, provider);
+    renderActorGrid(fresh, videoUrl);
 }

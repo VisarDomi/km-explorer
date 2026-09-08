@@ -71,11 +71,6 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-.ke-card.ke-unavailable {
-    cursor: default;
-    filter: grayscale(1);
-}
-
 .ke-card.selected {
     outline: 3px solid #0055ff;
     outline-offset: -3px;
@@ -92,55 +87,6 @@ body {
     height: 100%;
     object-fit: cover;
     display: block;
-}
-
-.ke-spinner-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 3;
-}
-
-.ke-spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid rgba(255,255,255,0.1);
-    border-top-color: #4af626;
-    border-radius: 50%;
-    animation: ke-spin 0.8s linear infinite;
-}
-
-@keyframes ke-spin {
-    to { transform: rotate(360deg); }
-}
-
-.ke-copied-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    color: #4af626;
-    font-size: 16px;
-    font-weight: 600;
-    z-index: 3;
-}
-
-.ke-failed-overlay {
-    position: absolute;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.72);
-    color: #ff8a8a;
-    font-size: 14px;
-    font-weight: 600;
-    z-index: 3;
 }
 
 .ke-fav-toggle {
@@ -285,20 +231,6 @@ body {
     font-size: 24px;
 }
 
-.ke-video-status {
-    min-height: 20px;
-    padding: 4px 12px;
-    color: #f0b35b;
-    text-align: center;
-    font-size: 13px;
-}
-
-.ke-section-title {
-    padding: 8px 12px;
-    color: #aaa;
-    font-size: 16px;
-    font-weight: 600;
-}
 
 /* Loading */
 
@@ -307,4 +239,23 @@ body {
     color: #666;
     padding: 20px;
     font-size: 16px;
+}
+
+.ke-video-frame {
+    position: relative;
+    min-height: 150px;
+}
+
+.ke-video-copy {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 16px 28px;
+    border: 1px solid #555;
+    border-radius: 8px;
+    background: #222;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
 }

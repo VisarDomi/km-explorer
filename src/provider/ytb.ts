@@ -3,7 +3,7 @@ import type { Provider, ProviderRoute } from './types';
 
 const TS_API = 'https://ts-api.ytboob.com/multi_search?x-typesense-api-key=2mFxuIpLuESx5X1aPGkDOx4ZAtM5jG46';
 const BASE_URL = 'https://ytboob.com';
-export const BATCH = 50;
+const BATCH = 50;
 
 const PER_PAGE = 12;
 const SITE_SIZE = 30;
@@ -204,7 +204,6 @@ async function fetchListingPageCount(): Promise<number> {
 
 export const ytboob: Provider = {
     hostname: new URL(BASE_URL).hostname,
-    clientPageSize: CLIENT_SIZE,
     recognize,
     clientPageForSitePage: sitePage => Math.ceil(sitePage / PROVIDER_PAGES_PER_CLIENT),
     sitePageForClientPage: clientPage =>

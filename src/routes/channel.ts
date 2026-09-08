@@ -1,16 +1,17 @@
 import type { Provider } from '../provider';
+import { navigate } from '../ui/navigation';
 import { fetchActorVideos, getCachedActorVideos } from '../core/actor-videos';
 import { startInit, getGrid } from '../ui/shell';
 import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
 import type { VideoStub } from '../types';
 
-function render(videos: VideoStub[], provider: Provider): void {
+function render(videos: VideoStub[]): void {
     const grid = getGrid();
     grid.innerHTML = '';
     for (const video of videos) {
         grid.appendChild(createVideoCard(video, selected => {
-            window.location.href = selected.pageUrl;
-        }, provider));
+            navigate(selected.pageUrl);
+        }));
     }
     if (videos.length === 0) {
         grid.innerHTML = '<div class="ke-empty">No videos found</div>';
@@ -24,11 +25,11 @@ export async function init(provider: Provider, actorUrl: string): Promise<void> 
 
     const cached = await getCachedActorVideos(provider, actorUrl);
     if (cached) {
-        render(cached, provider);
+        render(cached);
         centerStoredCardHighlight();
     }
 
     const fresh = await fetchActorVideos(provider, actorUrl);
-    render(fresh, provider);
+    render(fresh);
     centerStoredCardHighlight();
 }

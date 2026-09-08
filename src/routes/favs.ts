@@ -1,4 +1,5 @@
 import type { Provider } from '../provider';
+import { navigate } from '../ui/navigation';
 import { getFavs, mergeFavs } from '../storage/favorites';
 import { getVideos } from '../core/videos';
 import { startInit, getGrid } from '../ui/shell';
@@ -7,13 +8,13 @@ import { replacePagination } from '../ui/pagination';
 import type { VideoStub } from '../types';
 import { startHomeBackup } from '../core/home-backup';
 
-function render(videos: VideoStub[], provider: Provider): void {
+function render(videos: VideoStub[]): void {
     const grid = getGrid();
     grid.innerHTML = '';
     for (const video of videos) {
         grid.appendChild(createVideoCard(video, selected => {
-            window.location.href = selected.pageUrl;
-        }, provider));
+            navigate(selected.pageUrl);
+        }));
     }
     if (videos.length === 0) {
         grid.innerHTML = '<div class="ke-empty">No favorites yet</div>';
@@ -70,7 +71,7 @@ function buildImportSection(provider: Provider): void {
         merge.textContent = 'Merging...';
         try {
             const added = await mergeFavs(imported);
-            render(await getVideos(await getFavs(), provider), provider);
+            render(await getVideos(await getFavs(), provider));
             status.textContent = `Added ${added} of ${imported.length} IDs`;
         } catch (error) {
             status.textContent = error instanceof Error ? error.message : String(error);
@@ -95,7 +96,7 @@ export async function init(provider: Provider): Promise<void> {
         const current = ++generation;
         const videos = await getVideos(await getFavs(), provider);
         if (generation !== current) return;
-        render(videos, provider);
+        render(videos);
         centerStoredCardHighlight();
     };
     window.addEventListener('reader-data-restored', () => { void refresh(); });

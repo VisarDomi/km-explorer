@@ -19,7 +19,6 @@ export interface ActorVideoPage {
 
 export interface Provider {
     readonly hostname: string;
-    readonly clientPageSize: number;
     recognize(url: URL): ProviderRoute;
     clientPageForSitePage(sitePage: number): number;
     sitePageForClientPage(clientPage: number): number;
