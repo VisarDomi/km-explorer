@@ -41,10 +41,13 @@ It guards repeated injection and stops/replaces the original DOM instead of
 Safari's recursively reinjecting document.open/close sequence. It owns the mobile
 viewport. This is not a guarantee that zero original website bytes/scripts run.
 
-The iOS host lives in `../../manga/gallery-reader/extension/apple/`. Run
-`npm run build:extensions` there to stage both independent bundles, then build
-the existing iOS host. Its name is **Reader Extensions**, containing Gallery Reader
-and KM Explorer as separate Safari extensions. KM's bundle identifier is
+The iOS host lives in the separate
+[Reader Extensions](https://github.com/VisarDomi/reader-extensions) repo
+(default checkout: `../../reader-extensions`). Its
+[setup/deployment guide](https://github.com/VisarDomi/reader-extensions#fresh-machine-setup)
+covers all four independent extensions. From that repo, `npm run build -- km-explorer`
+builds/stages KM only, or `npm run stage -- km-explorer` stages this existing bundle.
+KM's bundle identifier is
 `com.visar.galleryreader.extensiontest.KMExplorer`. Enable KM and allow ytboob.com
 in Safari settings; disable its Userscripts version. Existing origin IndexedDB
 and backup identity are shared, not copied or reset. No clipboard extension
