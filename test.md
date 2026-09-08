@@ -26,6 +26,23 @@ KM_TEST_BUNDLE=dist/extension/content.js node tests/browser/backup.mjs
 
 ## Native extension checks
 
+### Scroll-delay audit — v92
+
+The listing's only 100ms delay was a timer around saving scroll position.
+It is removed: `scrollend` captures the current position immediately and sends
+it to the existing worker; IndexedDB writes remain asynchronous. There is no
+layout change or programmatic scroll in this handler. Backup/database failure
+timeouts and initial migration yields are unrelated and remain unchanged.
+
+`tests/browser/scroll-save.mjs` exercises both builds with real worker storage:
+save the scrollend position rather than a later position, save another completed
+scroll, and restore it on reload. Application main-thread IndexedDB access is
+forbidden during the test. On the phone, open a numbered listing, scroll, then
+reload and check that your position is restored. Video playback and Copy are
+unchanged.
+
+### Earlier native acceptance
+
 The combined Reader Extensions app built/signed/installed with two independent
 extensions. The initial iPhone run preserved 503 favorites, 21 scroll positions,
 12,633 videos, 4,966 details, 105 channels and the selected-card preference.
