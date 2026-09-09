@@ -1,1 +1,1 @@
-use npx tsc --noEmit 2>&1 and npm run build to check your code.
+readme.md and test.txt are only edited by user.
