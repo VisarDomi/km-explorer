@@ -5,6 +5,7 @@ import { getGrid, startInit } from '../ui/shell';
 import { centerStoredCardHighlight, createVideoCard } from '../ui/video-card';
 import { replacePagination } from '../ui/pagination';
 import { compute } from '../core/compute/transport';
+import { onSettledScroll } from '../core/scroll-settle';
 
 function saveScroll(): void {
     void compute('scroll-save', location.pathname, Math.max(0, window.scrollY)).catch(console.error);
@@ -45,6 +46,6 @@ export async function init(provider: Provider, sitePage: number): Promise<void> 
         document.getElementById(`ke-${targetIndex}`)?.scrollIntoView();
     }
 
-    window.addEventListener('scrollend', saveScroll);
+    onSettledScroll(saveScroll);
     window.addEventListener('pagehide', saveScroll);
 }
