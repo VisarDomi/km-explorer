@@ -23,16 +23,9 @@ export default defineConfig(({ mode }) => {
         modulePreload: false,
         cssCodeSplit: false,
     },
-    plugins: extension ? [{
-        name: 'safari-document-takeover',
-        enforce: 'pre',
-        transform(source, id) {
-            if (!id.endsWith('/src/ui/shell.ts')) return;
-            const original = 'document.open();\n    document.close();';
-            if (!source.includes(original)) throw new Error('KM takeover changed; inspect the Safari adapter');
-            return source.replace(original, 'document.documentElement?.replaceChildren();');
-        },
-    }] : [
+    // Preserve SOP; extension/main.ts guards Safari document.close() reentry.
+    // DOM replacement alone leaves the original site's listeners alive.
+    plugins: extension ? [] : [
         monkey({
             entry: "src/main.ts",
             userscript: {

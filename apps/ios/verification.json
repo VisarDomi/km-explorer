@@ -1,0 +1,32 @@
+{
+  "app": "com.visar.Ytb.paid",
+  "initialRenewal": {
+    "inputHash": "19e4208a6a246a0d7be233a30d634fb091a0b6ce45e90c2c2ebbe128611b338c",
+    "installedProfiles": {
+      "65U58U86DD.com.visar.Ytb.paid": {
+        "id": "65U58U86DD.*",
+        "uuid": "a614ca60-2f64-44e1-ad22-34f9e1a8b0dc",
+        "created": 1789246232.0,
+        "expires": 1820782232.0
+      }
+    },
+    "lastSuccess": 1789246236.425815,
+    "nextDue": 1791838236.425815,
+    "transport": "wired",
+    "lastError": null
+  },
+  "retainedFavorites": 503,
+  "physicalPlayback": true,
+  "testTransport": "wired",
+  "displayName": "Ytb",
+  "customIcon": false,
+  "bundleSHA256": "187e05a1e2b8566e568e9242320b8bc8088a1e21960c399943e9221e05d45b3d",
+  "browser": "PASS: manual import, worker IDB, playback failure Copy only on tap, related replace + Back, cold launch + Back, offline PC and independent namespace",
+  "serverTests": 5,
+  "renewalTests": 19,
+  "scheduler": "11 paid apps monthly; enabled; inventory pass",
+  "physicalColdRestore": "PASS: SIGKILL + relaunch returned to saved video; 8 related cards; readyState 4; muted inline playback advancing; history length 2",
+  "legacyBackup": "Untouched; user manually merged 503 favorites",
+  "build": 2,
+  "physicalBack": "PASS: one Back after cold video resume returned to home with all 503 favorites"
+}

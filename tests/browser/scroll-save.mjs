@@ -61,7 +61,6 @@ try {
     await page.waitForTimeout(150);
     await page.clock.install();
     await page.clock.pauseAt(new Date());
-    const initialSaved = await saved();
     await page.evaluate(() => {
         window.addEventListener('scrollend', event => {
             if (event.isTrusted) event.stopImmediatePropagation();
@@ -70,22 +69,23 @@ try {
         Object.defineProperty(window, 'scrollY', { configurable: true, value: 320 });
         dispatchEvent(new Event('scrollend'));
     });
-    await page.clock.runFor(99);
-    assert.equal(await saved(), initialSaved, 'No save before the full settling delay');
+    await waitSaved(320);
     await page.evaluate(() => Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 }));
-    await page.clock.runFor(1);
-    await waitSaved(640);
+    await page.clock.runFor(100);
+    assert.equal(await saved(), 320, 'No delayed sample may replace the scrollend position');
     await page.evaluate(() => {
         Object.defineProperty(window, 'scrollY', { configurable: true, value: 900 });
         dispatchEvent(new Event('scrollend'));
     });
-    await page.clock.runFor(50);
-    await page.evaluate(() => dispatchEvent(new Event('scroll')));
-    await page.clock.runFor(200);
-    assert.equal(await saved(), 640, 'Resumed movement cancels the pending save');
-    await page.evaluate(() => dispatchEvent(new Event('scrollend')));
-    await page.clock.runFor(100);
     await waitSaved(900);
+    await page.evaluate(() => {
+        Object.defineProperty(window, 'scrollY', { configurable: true, value: 920 });
+        dispatchEvent(new Event('scroll'));
+    });
+    await page.clock.runFor(200);
+    assert.equal(await saved(), 900, 'Movement alone must not start another save');
+    await page.evaluate(() => dispatchEvent(new Event('scrollend')));
+    await waitSaved(920);
     await page.evaluate(() => {
         Object.defineProperty(window, 'scrollY', { configurable: true, value: 960 });
         dispatchEvent(new Event('scrollend'));
@@ -94,7 +94,7 @@ try {
     await waitSaved(960);
     await page.evaluate(() => Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 }));
     await page.clock.runFor(200);
-    assert.equal(await saved(), 960, 'Pagehide saves immediately and cancels stale delayed work');
+    assert.equal(await saved(), 960, 'Pagehide saves immediately without stale delayed work');
     await page.evaluate(() => {
         delete window.scrollY;
         scrollTo(0, 960);
@@ -104,5 +104,5 @@ try {
     await inject();
     await page.waitForFunction(() => Math.abs(scrollY - 960) < 1);
     assert.deepEqual(errors, []);
-    console.log('PASS: 100 ms settle, final-position sampling, resumed-scroll cancellation, immediate pagehide save, reload restoration; no application main-thread IndexedDB access.');
+    console.log('PASS: immediate scrollend position, no delayed resampling, immediate pagehide save, reload restoration; no application main-thread IndexedDB access.');
 } finally { await browser.close(); }

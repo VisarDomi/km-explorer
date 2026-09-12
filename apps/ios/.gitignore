@@ -1,0 +1,4 @@
+build/
+Resources/Web/
+Resources/LocalCA.cer
+__pycache__/
