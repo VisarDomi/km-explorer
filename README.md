@@ -1,6 +1,6 @@
 # What
 
-A Safari extension and Safari userscript that overhauls the ui of the supported providers
+An iOS app, a Safari extension and a Safari userscript that overhauls the ui of the supported providers
 
 # Why
 
