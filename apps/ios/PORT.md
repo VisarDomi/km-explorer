@@ -101,3 +101,64 @@ worker in the back cache. Build 2 uses Gallery-style worker termination on
 pagehide and avoids an unnecessary per-page initialization write. Physical
 relaunch then restored the video with readyState 4 and advancing playback; the
 browser regression also verifies worker recreation and favorite edits on Back.
+
+
+## Fidelity audit — September 13, 2026
+
+The first four-codebase pass checked the builder's source substitutions, native
+fetch/navigation/checkpoints, storage initialization and the shared routes.
+No new demonstrated mismatch was found in those checked flows; runtime source
+was not changed. The app fixture suite passed. Rebuilding produced the exact
+existing prepared app.js hash:
+`187e05a1e2b8566e568e9242320b8bc8088a1e21960c399943e9221e05d45b3d`.
+This is source/fixture verification, not a claim of expanded codec support.
+See Manga Reader's `investigation/port-fidelity-audit.md` for scope and limits.
+
+## Second fidelity pass — build 3
+
+The UI remains the imported userscript: favorites, listing/actor batches, cards,
+selected-card behavior, CSS, inline media, scrubbing and Copy-on-error are shared.
+This pass corrects app boundaries rather than replacing those paths.
+
+- Native resume checkpoints no longer wait for the route's complete network
+  pipeline. A visible video is saved even while related actor metadata is pending
+  or fails. During initial rendering the existing offset is retained until user
+  input/render completion supplies a new one. Bootstrap Home still cannot replace
+  the saved video destination; a failed bootstrap listing also no longer prevents
+  the subsequent native resume navigation.
+- The native restoration input policy now includes keyboard input, alongside
+  touch/pointer/wheel. Checkpoints preserve query strings. Native route validation
+  accepts the same numbered pages (including leading zeros) and rejects the
+  source's unsupported /favs and page-1 routes.
+- Abort/timeout now cancels the corresponding URLSession task. Previously only
+  the JavaScript waiter rejected. Both the main-thread provider transport and
+  worker backup transport release native requests on suspension. A stale worker
+  cannot dispatch new native requests after replacement.
+- Completed pages retain normal bfcache/Back behavior. A page whose initial
+  render was interrupted reloads that same history entry on return, rather than
+  remaining stuck with a terminated worker and unfinished Loading UI.
+- Native storage initialization now resets its rejected promise, matching the
+  source's retry behavior. An interrupted first attempt cannot poison the cached
+  document permanently.
+
+`npm run test:ios` now includes native-web TypeScript checks, interrupted-storage
+regression and the expanded real-worker/browser fixture. Tests cover held related
+requests, early keyboard input, query preservation, native abort propagation,
+incomplete-page Back recovery, independent storage, original player controls,
+manual import/offline PC, related replace and cold-reopen Back. The existing four
+userscript suites pass unchanged. Native route checks run on the Mac by combining
+`Ytb/Models.swift` and `Tests/Routes.swift` and executing the resulting Swift file.
+The delivery/renewal record is `second-pass-verification.json`.
+
+Build 3 physical checks passed: one existing video reached readyState 4, played
+inline/muted with custom controls, and its playback time advanced. Force-kill
+and relaunch restored the same destination and playback advanced again. Back
+returned to the existing 503-card library. Fetch abort returned AbortError.
+Favorites were not imported, deleted or toggled during these device checks.
+No codec expansion or physical gesture-smoothness claim is made.
+
+Build 3 renewal completed through the existing monthly scheduler. Its initial
+Xcode provisioning attempt reported a network outage; a normal scheduler retry
+succeeded. Current inputs match the approved baseline, all three signed Web
+assets match the tested prepared files, and the job is active/idle with exit 0.
+Recovery evidence is copied as `ytb-second-pass-verification.json`.

@@ -10,6 +10,9 @@ for (const text of ['km-explorer','document.open()','window.stop()','GalleryRead
 const browser = await chromium.launch({executablePath:'/usr/bin/chromium',headless:true});
 const state = {lastPath:'/',libraryPath:'/',positions:{}};
 let boot = true, resume, active, copies = [], backupRequests = [], sourceRequests = 0;
+let actorGate, releaseActor, detailGate, releaseDetail, releaseFetch;
+const cancelled=[];
+const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
 const videos = ['1','2'].map(id=>({id,pageUrl:`https://ytboob.com/video-${id}/`,thumbnail:`https://ytboob.com/${id}.jpg`}));
 const payload = body=>({status:200,headers:{'Content-Type':'application/json'},body:Buffer.from(typeof body==='string'?body:JSON.stringify(body)).toString('base64')});
 try {
@@ -22,8 +25,12 @@ try {
         return route.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><script defer src="/app.js"></script>'});
     });
     await context.exposeBinding('bridge',async(_,{command,args})=>{
+        if(command==='fetch-cancel') {cancelled.push(args.requestID);return '{}';}
         if(command==='fetch') {
             const url=new URL(args.url);
+            if(url.hostname==='cancel.test') await new Promise(resolve=>{releaseFetch=resolve;});
+            if(url.pathname.startsWith('/wp-json/wp/v2/actors') && actorGate) await actorGate;
+            if(url.pathname.startsWith('/video-') && detailGate) await detailGate;
             if(url.port==='7777') { backupRequests.push(args); throw new Error('PC offline'); }
             if(url.hostname==='ts-api.ytboob.com') {
                 const query=JSON.parse(args.body).searches[0];
@@ -38,7 +45,7 @@ try {
         if(command==='clipboard') { copies.push(args.text); return '{}'; }
         if(command==='init') {
             active=args.document;
-            const path=new URL(_.frame.url()).pathname;
+            const frameURL=new URL(_.frame.url());const path=frameURL.pathname+frameURL.search;
             const out={position:state.positions[path]};
             if(boot) {
                 boot=false;
@@ -65,8 +72,13 @@ try {
     await page.locator('.ke-card .ke-fav-toggle:enabled').waitFor();
     assert.equal(sourceRequests,0); assert.deepEqual(copies,[]);
     assert.equal(await page.locator('#reader-backup-setup').count(),0,'Offline PC is silent');
+    const gate=deferred();actorGate=gate.promise;releaseActor=gate.resolve;
     await page.locator('.ke-card img').click();
     await page.waitForURL('**/video-1/');
+    await page.locator('video').waitFor();
+    await page.evaluate(()=>window.ytbViewState.save());
+    assert.equal(state.lastPath,'/video-1/','Visible video is checkpointed while related metadata is still pending');
+    releaseActor();actorGate=undefined;
     await page.locator('.ke-video-copy:not([hidden])').waitFor();
     await page.waitForFunction(()=>document.querySelectorAll('.ke-card').length===2);
     assert.equal(sourceRequests,1);assert.deepEqual(copies,[]);
@@ -91,6 +103,7 @@ try {
     await reopened.locator('video').waitFor();
     await reopened.goBack();await reopened.waitForURL('https://ytb.test/');
     await reopened.locator('.ke-card img').waitFor();
+    await reopened.waitForFunction(()=>document.querySelector('.ke-returned-card')?.dataset.videoId==='1');
     await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
     assert(await reopened.evaluate(()=>window.terminatedWorkers)>0,'A cached document releases its database worker');
     await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
@@ -100,6 +113,36 @@ try {
     await favorite.click();
     await reopened.waitForFunction(()=>document.querySelector('.ke-fav-toggle').textContent==='❤');
     assert(backupRequests.every(r=>r.url.includes('/ytb/ytboob')),'Ytb uses its own backup namespace');
+    assert.deepEqual(errors,[]);
+    const abort=await reopened.evaluate(async()=>{
+        const controller=new AbortController();
+        const result=fetch('https://cancel.test/delayed',{signal:controller.signal}).then(()=> 'resolved',e=>e.name);
+        setTimeout(()=>controller.abort(),20);
+        return Promise.race([result,new Promise(resolve=>setTimeout(()=>resolve('still waiting'),200))]);
+    });
+    assert.equal(abort,'AbortError');assert(cancelled.length>0,'Abort cancels native transfer, not only its JS waiter');releaseFetch();
+    // Route queries must survive app checkpoints, unlike the previous path-only adapter.
+    state.positions['/video-3/?variant=test']={path:'/video-3/?variant=test',y:500};
+    const detail=deferred();detailGate=detail.promise;releaseDetail=detail.resolve;
+    await reopened.goto('https://ytb.test/video-3/?variant=test');
+    await reopened.waitForFunction(()=>!!window.ytbViewState);
+    await reopened.evaluate(()=>dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'})));
+    releaseDetail();detailGate=undefined;
+    await reopened.locator('video').waitFor();
+    await reopened.waitForTimeout(100);
+    assert.equal(await reopened.evaluate(()=>scrollY),0,'Keyboard input cancels delayed native restoration');
+    await reopened.evaluate(()=>window.ytbViewState.save());
+    assert.equal(state.lastPath,'/video-3/?variant=test','Checkpoint preserves provider query');
+    // Freeze during the initial render: cancel native metadata, then recover
+    // this unfinished history entry on Back rather than leaving it on Loading.
+    const blocked=deferred();actorGate=blocked.promise;releaseActor=blocked.resolve;
+    await reopened.goto('https://ytb.test/video-4/');await reopened.locator('video').waitFor();
+    const beforeSuspend=cancelled.length;
+    await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+    assert(cancelled.length>beforeSuspend,'Suspension cancels in-flight provider metadata');
+    releaseActor();actorGate=undefined;
+    await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
+    await reopened.waitForFunction(()=>document.querySelectorAll('.ke-card').length===2);
     assert.deepEqual(errors,[]);
     const dbs=await reopened.evaluate(()=>indexedDB.databases());
     assert(dbs.some(db=>db.name==='ytb'));assert(!dbs.some(db=>db.name==='km-explorer'));

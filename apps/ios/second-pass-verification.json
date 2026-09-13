@@ -1,0 +1,156 @@
+{
+  "date": "2026-09-13",
+  "build": 3,
+  "app": "Ytb",
+  "bundleId": "com.visar.Ytb.paid",
+  "sourceRuntimeChanged": false,
+  "tests": {
+    "userscriptSuites": 4,
+    "nativeWebTypeScript": "passed",
+    "storageRetry": "passed",
+    "appBrowser": "passed: held related metadata checkpoint, keyboard intent, URL queries, native cancellation, incomplete-page return, original controls, copy, favorites, selected-card persistence, cold-reopen Back",
+    "nativeSwiftRoutes": "passed on Mac"
+  },
+  "phone": [
+    {
+      "bundle": "com.visar.Ytb.paid",
+      "snapshot": {
+        "route": "video",
+        "cards": 8,
+        "decodedImages": 8,
+        "scrollY": 0,
+        "checkpoint": true,
+        "abortResult": null,
+        "copyVisible": false,
+        "media": [
+          {
+            "ready": 4,
+            "error": null,
+            "time": 9.448749610353104,
+            "paused": false,
+            "muted": true,
+            "inline": true,
+            "nativeControls": false
+          }
+        ]
+      },
+      "routeFingerprint": "68e62b6a2778385d7b578ccc11f78bd67285bd6435cedda1ab85a5fd44ece08e",
+      "check": "checkpoint"
+    },
+    {
+      "bundle": "com.visar.Ytb.paid",
+      "snapshot": {
+        "route": "video",
+        "cards": 8,
+        "decodedImages": 8,
+        "scrollY": 0,
+        "checkpoint": true,
+        "abortResult": "AbortError",
+        "copyVisible": false,
+        "media": [
+          {
+            "ready": 4,
+            "error": null,
+            "time": 19.60186302132601,
+            "paused": false,
+            "muted": true,
+            "inline": true,
+            "nativeControls": false
+          }
+        ]
+      },
+      "routeFingerprint": "68e62b6a2778385d7b578ccc11f78bd67285bd6435cedda1ab85a5fd44ece08e",
+      "check": "abort"
+    },
+    {
+      "bundle": "com.visar.Ytb.paid",
+      "snapshot": {
+        "route": "video",
+        "cards": 8,
+        "decodedImages": 8,
+        "scrollY": 0,
+        "checkpoint": false,
+        "abortResult": null,
+        "copyVisible": false,
+        "media": [
+          {
+            "ready": 4,
+            "error": null,
+            "time": 6.852619376976556,
+            "paused": false,
+            "muted": true,
+            "inline": true,
+            "nativeControls": false
+          }
+        ]
+      },
+      "routeFingerprint": "68e62b6a2778385d7b578ccc11f78bd67285bd6435cedda1ab85a5fd44ece08e",
+      "check": "cold-reopen"
+    },
+    {
+      "bundle": "com.visar.Ytb.paid",
+      "snapshot": {
+        "route": "video",
+        "cards": 8,
+        "decodedImages": 8,
+        "scrollY": 0,
+        "checkpoint": false,
+        "abortResult": null,
+        "copyVisible": false,
+        "media": [
+          {
+            "ready": 4,
+            "error": null,
+            "time": 16.999823886647256,
+            "paused": false,
+            "muted": true,
+            "inline": true,
+            "nativeControls": false
+          }
+        ]
+      },
+      "routeFingerprint": "68e62b6a2778385d7b578ccc11f78bd67285bd6435cedda1ab85a5fd44ece08e",
+      "check": "advancing-playback"
+    },
+    {
+      "bundle": "com.visar.Ytb.paid",
+      "snapshot": {
+        "route": "library",
+        "cards": 503,
+        "decodedImages": 503,
+        "scrollY": 0,
+        "checkpoint": false,
+        "abortResult": null,
+        "copyVisible": false,
+        "media": []
+      },
+      "routeFingerprint": "8a5edab282632443219e051e4ade2d1d5bbc671c781051bf1437897cbdfea0f1",
+      "check": "back"
+    }
+  ],
+  "limits": [
+    "Real playback tested on one existing video; no expanded codec support claim",
+    "No physical scrubbing/gesture smoothness measurement",
+    "Media playback/watch-time behavior remains the userscript behavior"
+  ],
+  "renewal": {
+    "scheduler": "com.visar.installed-apps-refresh",
+    "active": true,
+    "lastExitStatus": 0,
+    "bundleId": "com.visar.Ytb.paid",
+    "version": "3",
+    "iconDeclared": false,
+    "webAssetsSHA256": {
+      "app.js": "69a79683a62d17733b56accab78385b30046824beaaa510dddffe1489d1c94c0",
+      "style.css": "2abe0e29bb4cf0e4dee4f9da11bc94714baaae6108a866902cdc80af643ca43b",
+      "index.html": "3b6e8e5d0d23ac48301858c7b1abead5b2b75e562d0dcb574cc0729793b8f4ef"
+    },
+    "lastSuccess": 1789290044.680377,
+    "nextDue": 1791882044.680377,
+    "lastError": null,
+    "inputHash": "4f1853c08e995abc2bf29154b61bc70bbf062da9847eebae983c7dc5c34f116d",
+    "currentInputsMatch": true,
+    "profileExpires": "2027-09-13T09:00:41Z",
+    "initialAttempt": "Xcode reported network offline while provisioning; retry through the same scheduler succeeded"
+  }
+}

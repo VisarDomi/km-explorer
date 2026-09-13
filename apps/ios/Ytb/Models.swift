@@ -5,10 +5,16 @@ struct ViewPosition: Codable, Sendable {
     let y: Double
     static func route(_ path: String) -> String? {
         guard let url = URLComponents(string: path), url.scheme == nil, url.host == nil,
-              url.fragment == nil, url.query == nil, path.count < 2048 else { return nil }
-        if path == "/" { return "library:/" }
-        if path.range(of: "^/(page/[2-9][0-9]*|page/1[0-9]+|actor/[^/]+)/?$", options: .regularExpression) != nil { return "library:" + path }
-        if path.range(of: "^/[^/]+/?$", options: .regularExpression) != nil { return "video:" + path }
+              url.fragment == nil, path.count < 2048 else { return nil }
+        let route = url.percentEncodedPath
+        if route == "/" { return "library:" + path }
+        if route == "/favs" || route == "/favs/" { return nil }
+        if route.range(of: "^/page/[0-9]+/?$", options: .regularExpression) != nil {
+            let number = route.split(separator: "/").last.flatMap { Int($0) }
+            return number.map { $0 >= 2 } == true ? "library:" + path : nil
+        }
+        if route.range(of: "^/actor/[^/]+/?$", options: .regularExpression) != nil { return "library:" + path }
+        if route.range(of: "^/[^/]+/?$", options: .regularExpression) != nil { return "video:" + path }
         return nil
     }
     func validate() throws {
