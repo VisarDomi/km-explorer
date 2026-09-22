@@ -39,14 +39,19 @@ struct HTTPResult: Codable, Sendable {
 actor YtbAPI {
     private let session: URLSession
     private let origin: String
-    init(origin: String, pc: URL, certificateURL: URL?) {
+    private let pcHost: String
+    private let pcSession: URLSession
+    init(origin: String, pc: URL, certificateURL: URL?, configuration: URLSessionConfiguration = .default) {
         self.origin = origin
-        let config = URLSessionConfiguration.default
+        self.pcHost = pc.host ?? ""
+        let config = configuration
         config.timeoutIntervalForRequest = 25
         config.timeoutIntervalForResource = 90
         config.httpMaximumConnectionsPerHost = 12
         config.urlCache = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 64 * 1024 * 1024)
         let queue = OperationQueue(); queue.name = "Ytb.Network"; queue.maxConcurrentOperationCount = 1
+        pcSession = URLSession(configuration: config, delegate: LocalTrust(host: pc.host ?? "", certificateURL: certificateURL), delegateQueue: queue)
+        config.waitsForConnectivity = true
         session = URLSession(configuration: config, delegate: LocalTrust(host: pc.host ?? "", certificateURL: certificateURL), delegateQueue: queue)
     }
     func request(_ input: Data) async throws -> (Data, HTTPURLResponse) {
@@ -58,7 +63,15 @@ actor YtbAPI {
         let referrer = args["referrer"] as? String ?? origin + "/"
         request.setValue(referrer.hasPrefix("https://") ? referrer : origin + "/", forHTTPHeaderField: "Referer")
         if let body = args["body"] as? String { request.httpBody = Data(body.utf8) }
-        let (data,response) = try await session.data(for: request)
+        let read = ["GET", "HEAD"].contains(request.httpMethod ?? "GET") ||
+            (request.httpMethod == "POST" && url.host == "ts-api.ytboob.com" && url.path == "/multi_search")
+        let retry = url.host != pcHost && read
+        let client = url.host == pcHost ? pcSession : session
+        let (data,response) = try await recoverNetworkRead(enabled: retry) {
+            let result = try await client.data(for: request)
+            if retry { try retryableResponse(result.1) }
+            return result
+        }
         guard let http = response as? HTTPURLResponse else { throw ReaderError.invalidRequest }
         return (data,http)
     }

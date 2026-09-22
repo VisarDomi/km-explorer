@@ -1,16 +1,17 @@
 // The production bundle and real worker/IndexedDB, with only native I/O mocked.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { chromium } from '../../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
+import { webkit } from '../../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
 const bundle = fs.readFileSync(new URL('../build/Web/app.js',import.meta.url),'utf8');
 const inputs = JSON.parse(fs.readFileSync(new URL('../build/inputs.json',import.meta.url),'utf8'));
 assert(inputs.some(p=>p.endsWith('src/provider/ytb.ts')));
 assert(!inputs.some(p=>p.endsWith('src/provider/index.ts')));
 for (const text of ['km-explorer','document.open()','window.stop()','GalleryReader']) assert(!bundle.includes(text),text+' leaked into Ytb');
-const browser = await chromium.launch({executablePath:'/usr/bin/chromium',headless:true});
+const browser = await webkit.launch({headless:true});
 const state = {lastPath:'/',libraryPath:'/',positions:{}};
 let boot = true, resume, active, copies = [], backupRequests = [], sourceRequests = 0;
 let actorGate, releaseActor, detailGate, releaseDetail, releaseFetch;
+let actorPending=0;
 const cancelled=[];
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
 const videos = ['1','2'].map(id=>({id,pageUrl:`https://ytboob.com/video-${id}/`,thumbnail:`https://ytboob.com/${id}.jpg`}));
@@ -19,6 +20,7 @@ try {
     const context = await browser.newContext({viewport:{width:390,height:844}});
     await context.route('**/*',route=>{
         const url=new URL(route.request().url());
+        if (url.protocol === 'blob:') return route.continue();
         if(url.pathname==='/app.js') return route.fulfill({contentType:'text/javascript',body:bundle});
         if(url.pathname.endsWith('.mp4')) return route.fulfill({contentType:'video/mp4',body:'invalid media fixture'});
         if(url.pathname.endsWith('.jpg')) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"/>'});
@@ -29,7 +31,7 @@ try {
         if(command==='fetch') {
             const url=new URL(args.url);
             if(url.hostname==='cancel.test') await new Promise(resolve=>{releaseFetch=resolve;});
-            if(url.pathname.startsWith('/wp-json/wp/v2/actors') && actorGate) await actorGate;
+            if(url.pathname.startsWith('/wp-json/wp/v2/actors') && actorGate) { actorPending++; try { await actorGate; } finally { actorPending--; } }
             if(url.pathname.startsWith('/video-') && detailGate) await detailGate;
             if(url.port==='7777') { backupRequests.push(args); throw new Error('PC offline'); }
             if(url.hostname==='ts-api.ytboob.com') {
@@ -137,11 +139,16 @@ try {
     // this unfinished history entry on Back rather than leaving it on Loading.
     const blocked=deferred();actorGate=blocked.promise;releaseActor=blocked.resolve;
     await reopened.goto('https://ytb.test/video-4/');await reopened.locator('video').waitFor();
+    for(let i=0;i<100 && actorPending===0;i++) await new Promise(resolve=>setTimeout(resolve,20));
+    assert(actorPending>0,'Fixture has a live metadata request before suspension');
     const beforeSuspend=cancelled.length;
     await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+    for(let i=0;i<100 && cancelled.length===beforeSuspend;i++) await new Promise(resolve=>setTimeout(resolve,20));
     assert(cancelled.length>beforeSuspend,'Suspension cancels in-flight provider metadata');
     releaseActor();actorGate=undefined;
-    await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
+    const reload=reopened.waitForEvent('domcontentloaded');
+    await reopened.evaluate(()=>dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))).catch(error=>{ if (!error.message.includes('Execution context was destroyed')) throw error; });
+    await reload;
     await reopened.waitForFunction(()=>document.querySelectorAll('.ke-card').length===2);
     assert.deepEqual(errors,[]);
     const dbs=await reopened.evaluate(()=>indexedDB.databases());

@@ -1,3 +1,5 @@
+import { installImageRecovery } from './image-recovery';
+import { installMediaRecovery } from './media-recovery';
 import { ytboob } from '../../../src/provider/ytb';
 import { init as favorites } from '../../../src/routes/favs';
 import { init as listing } from '../../../src/routes/search';
@@ -5,6 +7,9 @@ import { init as actor } from '../../../src/routes/channel';
 import { init as video } from '../../../src/routes/video';
 import { native, appURL } from './native';
 import { installFetch } from './fetch';
+
+installMediaRecovery(false);
+installImageRecovery();
 
 const network = installFetch(request => native('fetch', request), requestID => { void native('fetch-cancel',{requestID}).catch(() => {}); });
 const documentID = crypto.randomUUID();

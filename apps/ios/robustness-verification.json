@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-22T16:17:02.849345+00:00",
+  "scope": [
+    "ytb"
+  ],
+  "device": "iPhone 12 Pro Max",
+  "builds": {
+    "ytb": 4
+  },
+  "coldLaunch": {
+    "ytb": {
+      "ready": "complete",
+      "sameRoute": true,
+      "scrollBefore": 10119,
+      "scrollAfter": 10371,
+      "rowsBefore": 503,
+      "rowsAfter": 503,
+      "imagesAfter": 503,
+      "loadedImagesAfter": 503,
+      "errors": []
+    }
+  },
+  "physicalNetworkRecovery": {
+    "ytb": {
+      "offline": {
+        "state": "pending",
+        "start": 1790093183818,
+        "online": false
+      },
+      "afterWiFiReturned": {
+        "state": "completed",
+        "status": 200,
+        "bytes": 14802,
+        "elapsed": 499408
+      },
+      "reissued": false,
+      "reloaded": false
+    }
+  },
+  "tests": {
+    "ytbNative": [
+      "PASS: search POST recovery and durable reader/list checkpoints",
+      "PASS: actual URLSession loss/503 recovery, cancellation, prompt PC and no write replay"
+    ],
+    "nativeTypecheck": "passed for Manga, Gallery Reader, Ytb, Tango",
+    "ytbWebKit": "production bundle/worker/IndexedDB, media recovery and thumbnail recovery passed",
+    "ytbSharedBuild": "userscript and extension version 94 built"
+  },
+  "boundaries": [
+    "Force-quit stops foreground transfers. Retained download work resumes when the app reopens; no execution while force-quit is claimed.",
+    "PC commands and account mutations are not automatically replayed.",
+    "Live playback interruption is covered by native transport and WebKit fixtures; the physical outage probes cover actual pending read requests."
+  ],
+  "renewal": {
+    "ytb": {
+      "inputHash": "0668110923082393dc9fdf0502ba5b32d8975c915dbed39dfad653353f54b9e4",
+      "lastSuccess": 1790094003.3288121,
+      "nextDue": 1792686003.328812,
+      "transport": "wired",
+      "installedProfiles": {
+        "65U58U86DD.com.visar.Ytb.paid": {
+          "id": "65U58U86DD.*",
+          "uuid": "1cdf8a74-2f46-43d7-aee7-25bfa6dc903a",
+          "created": 1790093916.0,
+          "expires": 1821629916.0
+        }
+      },
+      "attempts": 1
+    }
+  },
+  "scheduler": {
+    "label": "com.visar.installed-apps-refresh",
+    "resumed": true,
+    "lastExitStatus": 0,
+    "newJobsCreated": false
+  }
+}

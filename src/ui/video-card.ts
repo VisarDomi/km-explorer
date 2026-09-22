@@ -92,14 +92,14 @@ export function createVideoCard(
     }).catch(error => { favorite.title = String(error); console.error(error); });
     card.appendChild(favorite);
 
-    card.addEventListener('click', () => {
+    card.addEventListener('click', async () => {
         if (disabled || card.hasAttribute('data-card-busy')) return;
         card.setAttribute('data-card-busy', 'true');
         const highlight = { id: video.id, pageUrl: video.pageUrl };
         highlightRead = Promise.resolve(highlight);
-        // Queue the small preference write, but never gate navigation on it.
-        // The destination resolves its own source; cards do no detail requests.
-        void compute('highlight-save', highlight).catch(console.error);
+        // Commit this small local selection before navigation can terminate the
+        // storage worker. Source/related-video requests belong to the destination.
+        await compute('highlight-save', highlight).catch(console.error);
         onClick(video);
     });
     return card;
