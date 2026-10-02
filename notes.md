@@ -31,17 +31,10 @@ It guards repeated injection and stops/replaces the original DOM instead of
 Safari's recursively reinjecting document.open/close sequence. It owns the mobile
 viewport. This is not a guarantee that zero original website bytes/scripts run.
 
-The iOS host lives in the separate
-[Reader Extensions](https://github.com/VisarDomi/reader-extensions) repo
-(default checkout: `../../reader-extensions`). Its
-[setup/deployment guide](https://github.com/VisarDomi/reader-extensions#fresh-machine-setup)
-covers all four independent extensions. From that repo, `npm run build -- km-explorer`
-builds/stages KM only, or `npm run stage -- km-explorer` stages this existing bundle.
-KM's bundle identifier is
-`com.visar.galleryreader.extensiontest.KMExplorer`. Enable KM and allow ytboob.com
-in Safari settings; disable its Userscripts version. Existing origin IndexedDB
-and backup identity are shared, not copied or reset. No clipboard extension
-permission is needed: Copy is a real user gesture on the failed video.
+The Reader Extensions iOS host that packaged this extension for Safari is retired;
+its source is in the history of the
+[ios-app-renewal](https://github.com/VisarDomi/ios-app-renewal) repo (formerly
+reader-extensions). The native Ytb app (`apps/ios/PORT.md`) replaces it.
 
 Private `dist/extension` contains the PC backup key. Do not publish it.
 
