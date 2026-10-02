@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium } from '../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
-import { BackupStore } from '../../../../manga/gallery-downloader/gallery-server/downloader/dist/reader-backups.js';
+import { chromium } from 'playwright-core';
+import { BackupStore } from '../../server/backups.mjs';
 // The same behavioral cases also exercise the independently compiled extension.
 // Injection here is a storage regression fixture, not a Safari startup test.
 const bundle = fs.readFileSync(process.env.KM_TEST_BUNDLE || 'dist/km-explorer.user.js','utf8');
@@ -27,7 +27,7 @@ try {
         await context.route('**/*',async route=>{
             const url=new URL(route.request().url());
             const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type,X-Reader-Backup-Key','Access-Control-Allow-Methods':'GET,PUT,OPTIONS'};
-            if(url.port==='7777'){
+            if(url.port==='7733'){
                 if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers});
                 attempts++;
                 if(offline)return route.abort('connectionrefused');

@@ -39,10 +39,8 @@ history semantics are introduced.
 - Bundle: `com.visar.Ytb.paid`; paid team `65U58U86DD`.
 - IndexedDB: `ytb`; PC identity database: `ytb-pc-backup-state-v1`.
 - Native view state: `Library/Application Support/Ytb/view.json`.
-- New PC backups: `backups/readers/ytb/ytboob` in gallery-downloader.
+- PC backups: this repository's server, `ytb` namespace (`server/BACKUPS.md`).
 
-Existing km-explorer backups remain unchanged at
-`/home/visar/Documents/work/manga/gallery-downloader/backups/readers/km-explorer/ytboob`.
 The user requested manual import and no migration code. Home retains the original
 Import / Merge and Export controls. There is no legacy namespace discovery,
 automatic import or backup copying. The PC server accepts the new Ytb namespace

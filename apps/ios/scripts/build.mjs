@@ -2,13 +2,14 @@ import { build } from 'esbuild';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..'), app = resolve(root,'apps/ios');
 const args = process.argv.slice(2);
 if (args.some(arg => arg !== '--prepare-only')) throw new Error('Usage: npm run build:ios -- [--prepare-only]');
 const out = resolve(app,'build/Web'); await mkdir(out,{recursive:true});
-const backupURL = process.env.VITE_READER_BACKUP_URL || 'https://192.168.1.197:7777';
-const key = process.env.VITE_READER_BACKUP_KEY || (await readFile(resolve(root,'../../manga/gallery-downloader/backups/readers/access-key'),'utf8')).trim();
+const backupURL = process.env.VITE_READER_BACKUP_URL || 'https://192.168.1.197:7733';
+const key = process.env.VITE_READER_BACKUP_KEY || (await readFile(resolve(homedir(),'.local/share/km-explorer/backups/access-key'),'utf8')).trim();
 const define = {__READER_BACKUP_URL__:JSON.stringify(backupURL),__READER_BACKUP_KEY__:JSON.stringify(key)};
 function replace(source, from, to) {
     if (!source.includes(from)) throw new Error('Shared source changed: review Ytb adapter for ' + from);

@@ -1,7 +1,7 @@
 // The production bundle and real worker/IndexedDB, with only native I/O mocked.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { webkit } from '../../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
+import { webkit } from 'playwright-core';
 const bundle = fs.readFileSync(new URL('../build/Web/app.js',import.meta.url),'utf8');
 const inputs = JSON.parse(fs.readFileSync(new URL('../build/inputs.json',import.meta.url),'utf8'));
 assert(inputs.some(p=>p.endsWith('src/provider/ytb.ts')));
@@ -33,7 +33,7 @@ try {
             if(url.hostname==='cancel.test') await new Promise(resolve=>{releaseFetch=resolve;});
             if(url.pathname.startsWith('/wp-json/wp/v2/actors') && actorGate) { actorPending++; try { await actorGate; } finally { actorPending--; } }
             if(url.pathname.startsWith('/video-') && detailGate) await detailGate;
-            if(url.port==='7777') { backupRequests.push(args); throw new Error('PC offline'); }
+            if(url.port==='7733') { backupRequests.push(args); throw new Error('PC offline'); }
             if(url.hostname==='ts-api.ytboob.com') {
                 const query=JSON.parse(args.body).searches[0];
                 const ids=query.filter_by?.match(/\d+/g);

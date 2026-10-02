@@ -1,0 +1,15 @@
+[Unit]
+Description=Ytb PC backups (port 7733)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/visar/.nvm/versions/node/v22.19.0/bin/node /home/visar/Documents/work/video/km-explorer/server/backups.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+
+[Install]
+WantedBy=default.target

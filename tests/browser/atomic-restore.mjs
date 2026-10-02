@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { build } from 'esbuild';
-import { chromium } from '../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
+import { chromium } from 'playwright-core';
 const result=await build({entryPoints:['src/core/compute/database.ts'],bundle:true,write:false,format:'iife',globalName:'KMDatabase'});
 const source=result.outputFiles[0].text+`\nself.onmessage=async()=>{
     try {

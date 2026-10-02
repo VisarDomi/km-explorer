@@ -2,7 +2,7 @@
 // no phone data or PC backup is touched. Run against userscript or extension.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { chromium } from '../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
+import { chromium } from 'playwright-core';
 
 const bundle = fs.readFileSync(process.env.KM_TEST_BUNDLE || 'dist/km-explorer.user.js', 'utf8');
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', headless: true });
@@ -10,7 +10,7 @@ try {
     const context = await browser.newContext({ viewport: { width: 428, height: 800 } });
     await context.route('**/*', async route => {
         const request = route.request(), url = new URL(request.url());
-        if (url.port === '7777') return route.abort('connectionrefused');
+        if (url.port === '7733') return route.abort('connectionrefused');
         if (url.hostname === 'ts-api.ytboob.com') {
             const page = JSON.parse(request.postData()).searches[0].page;
             const hits = page <= 5 ? Array.from({ length: 12 }, (_, i) => {

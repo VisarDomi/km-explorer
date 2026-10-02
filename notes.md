@@ -77,17 +77,14 @@ npm run build
 npm run tests
 ```
 
-Install `dist/km-explorer.user.js`. The build reads the existing private backup
-key from `../../manga/gallery-downloader/backups/readers/access-key`; overrides
-are described in `.env.example`. Do not publish the built userscript: it embeds
+Install `dist/km-explorer.user.js`. The build reads this repository's private
+backup key (`server/BACKUPS.md`); overrides are described in `.env.example`. Do not publish the built userscript: it embeds
 that key. The script uses native worker fetch, not an extra GM request grant.
 
 After formatting, reinstall/trust the PC HTTPS certificate, install this build,
 then visit the favorites home on the same LAN and choose **Restore from PC**.
-Select **iPhone before iOS downgrade**. PC snapshots live under
-`gallery-downloader/backups/readers/km-explorer/ytboob/` and appear in that repo's
-`npm run backups:status` output. Keep these files and the access key when moving PCs.
+PC snapshots appear in `npm run backups:status`; keep them and the access key when
+moving PCs.
 
 See [test.md](test.md) for verified phone results and safe tests, and
-[the shared backup guide](../../manga/gallery-downloader/READER-BACKUPS.md) for
-retention, authentication and recovery details.
+[PC backups](server/BACKUPS.md) for retention, authentication and recovery details.

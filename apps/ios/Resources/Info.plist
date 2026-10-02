@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>BackupServerURL</key>
-	<string>https://192.168.1.197:7777</string>
+	<string>https://192.168.1.197:7733</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>

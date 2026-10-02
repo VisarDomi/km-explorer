@@ -2,7 +2,7 @@
 // boundaries; Safari phone tests separately validate native clipboard and Back.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { chromium } from '../../../../manga/gallery-downloader/node_modules/playwright-core/index.mjs';
+import { chromium } from 'playwright-core';
 const bundle=fs.readFileSync(process.env.KM_TEST_BUNDLE || 'dist/km-explorer.user.js','utf8');
 const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true});
 try {
@@ -11,7 +11,7 @@ try {
     let detailFetches=0;
     await context.route('**/*',async route=>{
         const req=route.request(),url=new URL(req.url());
-        if(url.port==='7777')return route.abort('connectionrefused');
+        if(url.port==='7733')return route.abort('connectionrefused');
         if(url.hostname==='ts-api.ytboob.com')return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{results:[{found:1,hits:[]}]}});
         if(url.hostname==='vidhost.me')return route.fulfill({contentType:'video/mp4',body:'deliberately invalid media'});
         if(url.pathname.endsWith('.jpg'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>'});

@@ -7,9 +7,10 @@
     "build": "node scripts/build.mjs",
     "build:extension": "node scripts/build-extension.mjs",
     "tests": "node tests/browser/atomic-restore.mjs && node tests/browser/backup.mjs && node tests/browser/video-flow.mjs && node tests/browser/scroll-save.mjs",
-    "phone:backup": "node tests/ios/backup.mjs --backup",
     "build:ios": "node apps/ios/scripts/build.mjs",
-    "test:ios": "tsc --noEmit -p apps/ios/tsconfig.json && node apps/ios/Tests/boundaries.mjs && node apps/ios/Tests/app.mjs && node apps/ios/Tests/media-recovery.mjs && node apps/ios/Tests/image-recovery.mjs"
+    "test:ios": "tsc --noEmit -p apps/ios/tsconfig.json && node apps/ios/Tests/boundaries.mjs && node apps/ios/Tests/app.mjs && node apps/ios/Tests/media-recovery.mjs && node apps/ios/Tests/image-recovery.mjs",
+    "test:server": "node --test server/backups.test.mjs",
+    "backups:status": "node server/backups.mjs status"
   },
   "devDependencies": {
     "@types/tampermonkey": "^5.0.4",
@@ -17,6 +18,7 @@
     "ios-tools": "file:../../ios-tools",
     "vite": "^7.1.9",
     "vite-plugin-monkey": "^7.1.4",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "playwright-core": "1.62.1"
   }
 }
