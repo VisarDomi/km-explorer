@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createController, createSession, sleep } from 'userscript-ios-test/controller';
+import { createController, createSession, sleep } from 'ios-tools/controller';
 import { BackupStore } from '../../../../manga/gallery-downloader/gallery-server/downloader/dist/reader-backups.js';
 process.umask(0o077);
 if (!process.argv.includes('--backup')) throw new Error('Explicit --backup required');
