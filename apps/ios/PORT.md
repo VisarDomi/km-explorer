@@ -84,8 +84,8 @@ from favorites. Real gestures and codec acceptance still require the iPhone.
 
 ## Renewal and recovery
 
-Register `--ytb-root /Users/visar/Developer/ytb/apps/ios` with Reader Extensions'
-`scripts/configure-refresh.py`, keeping all existing root arguments. The shared
+`scripts/renewal.py` lists Ytb's renewal entry; ios-app-renewal's
+`scripts/configure-refresh.py` reads it from `/Users/visar/Developer/ytb/apps/ios`. The shared
 `com.visar.installed-apps-refresh` scheduler then includes Ytb monthly. Pause only
 an idle scheduler before updating approved build inputs; install/test, approve,
 verify renewal and re-enable it. Do not add another daily/monthly job.
