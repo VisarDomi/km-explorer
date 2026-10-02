@@ -31,10 +31,7 @@ It guards repeated injection and stops/replaces the original DOM instead of
 Safari's recursively reinjecting document.open/close sequence. It owns the mobile
 viewport. This is not a guarantee that zero original website bytes/scripts run.
 
-The Reader Extensions iOS host that packaged this extension for Safari is retired;
-its source is in the history of the
-[ios-app-renewal](https://github.com/VisarDomi/ios-app-renewal) repo (formerly
-reader-extensions). The native Ytb app (`apps/ios/PORT.md`) replaces it.
+On iOS, use the native Ytb app (`apps/ios/PORT.md`).
 
 Private `dist/extension` contains the PC backup key. Do not publish it.
 

@@ -76,19 +76,20 @@ Generated Web bundles contain the private PC access key and stay ignored. Restor
 the public LAN CA into `Resources/LocalCA.cer` from the trusted existing app setup;
 do not substitute an accept-all TLS handler.
 
-For inspection, use the Mac's existing inspector-venv Python with
-`scripts/app-inspector.py --host-bundle com.visar.Ytb.paid --seconds 0`.
+For inspection, use ios-tools' inspector on the Mac (`~/Developer/ios-tools/inspector`, see its README)
+with `--bundle com.visar.Ytb.paid --url-prefix ytb://app/ --snapshot-file
+scripts/inspector-snapshot.js`.
 Only one inspector may attach at a time. Close it after navigation, then attach
 a fresh session. Its default snapshot reports counts and media state, not URLs
 from favorites. Real gestures and codec acceptance still require the iPhone.
 
 ## Renewal and recovery
 
-`scripts/renewal.py` lists Ytb's renewal entry; ios-app-renewal's
-`scripts/configure-refresh.py` reads it from `/Users/visar/Developer/ytb/apps/ios`. The shared
-`com.visar.installed-apps-refresh` scheduler then includes Ytb monthly. Pause only
-an idle scheduler before updating approved build inputs; install/test, approve,
-verify renewal and re-enable it. Do not add another daily/monthly job.
+Ytb renews monthly through this repository's scheduler,
+`com.visar.renewal.km-explorer` ([ios-tools renewal](../../../../ios-tools/renewal/PAID-REFRESH.md)); `scripts/renewal.py`
+lists its entry (Mac mirror `/Users/visar/Developer/ytb/apps/ios`). Pause only that
+idle scheduler before updating approved build inputs; install/test, approve,
+verify renewal and resume it.
 The setup copy is `/home/visar/Documents/environment/mac-renewal`; runtime source
 stays here. See `verification.json` for this delivery's measured checks.
 
