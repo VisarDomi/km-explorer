@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "lib": ["ESNext", "DOM"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "moduleResolution": "bundler",
     "strict": true,
     "resolveJsonModule": true,
@@ -13,5 +13,5 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true
   },
-  "include": ["src", "extension/**/*.ts"]
+  "include": ["src"]
 }

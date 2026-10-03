@@ -1,6 +1,6 @@
 # What
 
-An iOS app, a Safari extension and a Safari userscript that overhauls the ui of the supported providers
+Ytb, an iOS app that overhauls the ui of ytboob
 
 # Why
 
@@ -12,7 +12,7 @@ Cache the urls in indexeddb so that navigation is faster
 
 ## combo
 
-use the copy button and paste the link in KMPlayer in ios to watch videos that can't be watched on safari.
+use the copy button and paste the link in KMPlayer in ios to watch videos the app can't play.
 
 ## setup
 [notes](./notes.md)

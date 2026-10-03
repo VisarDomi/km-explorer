@@ -1,10 +1,10 @@
 import { installImageRecovery } from './image-recovery';
 import { installMediaRecovery } from './media-recovery';
-import { ytboob } from '../../../src/provider/ytb';
-import { init as favorites } from '../../../src/routes/favs';
-import { init as listing } from '../../../src/routes/search';
-import { init as actor } from '../../../src/routes/channel';
-import { init as video } from '../../../src/routes/video';
+import { ytboob } from '../provider/ytb';
+import { init as favorites } from '../routes/favs';
+import { init as listing } from '../routes/search';
+import { init as actor } from '../routes/channel';
+import { init as video } from '../routes/video';
 import { native, appURL } from './native';
 import { installFetch } from './fetch';
 

@@ -11,8 +11,6 @@ def remote(code):
     return subprocess.run(SSH+['/usr/bin/python3 -'],input=code,text=True,check=True)
 p=argparse.ArgumentParser();p.add_argument('action',choices=['sync','build','status','install','finish']);a=p.parse_args()
 config={'name':'Ytb','bundleId':'com.visar.Ytb.paid'}
-label='com.visar.ytb-build'
-plist='/Users/visar/Library/LaunchAgents/'+label+'.plist'
 log=MAC+'/build'+'/xcode.log'
 if a.action=='sync':
     # Preserve previous build evidence during incremental synchronization.
@@ -21,18 +19,15 @@ if a.action=='sync':
     subprocess.run(SSH+['mkdir -p '+shlex.quote(MAC+'/build')],check=True)
     subprocess.run(['rsync','-az','--exclude=native/','-e',shlex.join(SSH[:-1]),str(APP/'build')+'/',SSH[-1]+':'+MAC+'/build'+'/'],check=True)
 elif a.action=='build':
-    remote(f'''import plistlib,pathlib,subprocess
-path=pathlib.Path({plist!r})
-job={{'Label':{label!r},'ProgramArguments':['/bin/bash','scripts/build.sh'],'WorkingDirectory':{MAC!r},'EnvironmentVariables':{{'DEVELOPMENT_TEAM':{TEAM!r},'SIGNING_DEVICE':{DEVICE!r}}},'RunAtLoad':True,'StandardOutPath':{log!r},'StandardErrorPath':{log!r}}}
-subprocess.run(['launchctl','bootout','gui/501',str(path)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-path.write_bytes(plistlib.dumps(job))
-subprocess.run(['launchctl','bootstrap','gui/501',str(path)],check=True)
-''')
+    # Attached in the GUI session for Xcode's Keychain; no background item is registered.
+    command=['sudo','-n','launchctl','asuser','501','sudo','-n','-H','-u','visar','/usr/bin/env',
+             'DEVELOPMENT_TEAM='+TEAM,'SIGNING_DEVICE='+DEVICE,'/bin/bash',MAC+'/scripts/build.sh']
+    script='mkdir -p '+shlex.quote(MAC+'/build')+' && cd '+shlex.quote(MAC)+' && '+shlex.join(command)+' 2>&1 | tee '+shlex.quote(log)
+    subprocess.run(SSH+['/bin/bash -o pipefail -c '+shlex.quote(script)],check=True)
 elif a.action=='status':
-    remote(f'''import subprocess,pathlib
-subprocess.run(['launchctl','list',{label!r}])
+    remote(f'''import pathlib
 p=pathlib.Path({log!r})
-print('\\n'.join(p.read_text().splitlines()[-14:]) if p.exists() else 'Waiting for log')
+print('\\n'.join(p.read_text().splitlines()[-14:]) if p.exists() else 'No build log')
 ''')
 elif a.action=='install':
     remote(f'''import subprocess,plistlib,pathlib,datetime,fnmatch
@@ -53,6 +48,4 @@ print('Verified bundle, display name, icon absence, signature, paid team, phone 
 subprocess.run(['xcrun','devicectl','device','install','app','--device',{DEVICE!r},str(app)],check=True)
 subprocess.run(['xcrun','devicectl','device','process','launch','--device',{DEVICE!r},{config['bundleId']!r}],check=True)
 ''')
-else: remote(f'''import subprocess
-subprocess.run(['launchctl','bootout','gui/501',{plist!r}],check=True)
-''')
+else: print('Build runs attached; no background job to remove.')

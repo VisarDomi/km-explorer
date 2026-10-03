@@ -11,8 +11,8 @@ Failed thumbnails retry automatically and resume on network return. No new UI.
 
 The shared card handler now commits its small local highlight before navigation
 can terminate the storage worker. It does not fetch video metadata before opening.
-This fix is built into the userscript/extension as well. Native cold reader/list
-checkpoints and interrupted-render recovery retain their existing behavior.
+Native cold reader/list checkpoints and interrupted-render recovery retain their
+existing behavior.
 
 Validation: `npm run build:ios -- --prepare-only`, `npm run test:ios`, and
 `bash apps/ios/scripts/test-network.sh` on the Mac. Native fixtures cover real

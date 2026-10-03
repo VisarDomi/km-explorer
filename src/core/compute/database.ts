@@ -1,6 +1,6 @@
 import type { VideoStub, VideoDetail } from '../../types';
 
-const DB_NAME = 'km-explorer';
+const DB_NAME = 'ytb';
 const DB_VERSION = 5;
 const VIDEO_STORE = 'videos';
 const DETAIL_STORE = 'details';
@@ -257,19 +257,19 @@ export interface Snapshot {
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0);
 export function validatePreferences(value: unknown): Preferences {
     const p = value as Preferences;
-    if (!p || !strings(p.favorites)) throw new Error('Invalid KM favorites');
-    if (p.highlight !== null && (!p.highlight || typeof p.highlight.id !== 'string' || typeof p.highlight.pageUrl !== 'string')) throw new Error('Invalid KM card highlight');
-    if (!p.scroll || typeof p.scroll !== 'object' || Array.isArray(p.scroll) || !Object.values(p.scroll).every(y => Number.isFinite(y) && y >= 0)) throw new Error('Invalid KM scroll positions');
+    if (!p || !strings(p.favorites)) throw new Error('Invalid Ytb favorites');
+    if (p.highlight !== null && (!p.highlight || typeof p.highlight.id !== 'string' || typeof p.highlight.pageUrl !== 'string')) throw new Error('Invalid Ytb card highlight');
+    if (!p.scroll || typeof p.scroll !== 'object' || Array.isArray(p.scroll) || !Object.values(p.scroll).every(y => Number.isFinite(y) && y >= 0)) throw new Error('Invalid Ytb scroll positions');
     return p;
 }
 export function validateSnapshot(value: unknown): Snapshot {
     const s = value as Snapshot;
-    if (s?.version !== 1 || !s.indexedDB) throw new Error('Invalid KM backup version');
+    if (s?.version !== 1 || !s.indexedDB) throw new Error('Invalid Ytb backup version');
     const d = s.indexedDB;
     validatePreferences(d.preferences);
-    if (!Array.isArray(d.videos) || !d.videos.every(v => v && typeof v.id === 'string' && typeof v.thumbnail === 'string' && typeof v.pageUrl === 'string')) throw new Error('Invalid KM video cache');
-    if (!Array.isArray(d.details) || !d.details.every(v => v && typeof v.pageUrl === 'string' && typeof v.videoSrc === 'string' && Array.isArray(v.actors) && v.actors.every(a => a && typeof a.name === 'string' && typeof a.url === 'string'))) throw new Error('Invalid KM detail cache');
-    if (!Array.isArray(d.channels) || !d.channels.every(v => v && typeof v.actorUrl === 'string' && typeof v.termId === 'string' && strings(v.videoIds))) throw new Error('Invalid KM channel cache');
+    if (!Array.isArray(d.videos) || !d.videos.every(v => v && typeof v.id === 'string' && typeof v.thumbnail === 'string' && typeof v.pageUrl === 'string')) throw new Error('Invalid Ytb video cache');
+    if (!Array.isArray(d.details) || !d.details.every(v => v && typeof v.pageUrl === 'string' && typeof v.videoSrc === 'string' && Array.isArray(v.actors) && v.actors.every(a => a && typeof a.name === 'string' && typeof a.url === 'string'))) throw new Error('Invalid Ytb detail cache');
+    if (!Array.isArray(d.channels) || !d.channels.every(v => v && typeof v.actorUrl === 'string' && typeof v.termId === 'string' && strings(v.videoIds))) throw new Error('Invalid Ytb channel cache');
     return s;
 }
 export async function preferences<T>(operation: (p: Preferences | undefined) => { value: T; next?: Preferences }, write = false): Promise<T> {
@@ -292,7 +292,7 @@ export async function preferences<T>(operation: (p: Preferences | undefined) => 
 }
 export async function migratePreferences(raw: Record<string, string>): Promise<void> {
     await preferences(p => ({ value: undefined, next: p ?? validatePreferences({
-        favorites: JSON.parse(raw['km-explorer-favorites-v1'] || '[]'),
+        favorites: JSON.parse(raw['ytb-favorites-v1'] || '[]'),
         highlight: JSON.parse(raw['ke-card-highlight'] || 'null'),
         scroll: Object.fromEntries(Object.entries(raw).filter(([key]) => key.startsWith('ke-scroll')).map(([key, value]) => [key.slice(9), Number(value)])),
     }) }), true);

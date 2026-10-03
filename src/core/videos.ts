@@ -1,5 +1,5 @@
 import { getVideosByIds, putVideos } from '../storage/db';
-import type { Provider } from '../provider';
+import type { Provider } from '../provider/types';
 import type {VideoStub} from "../types";
 
 export async function getVideos(ids: string[], provider: Provider): Promise<VideoStub[]> {

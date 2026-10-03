@@ -1,4 +1,4 @@
-import type { Provider } from '../provider';
+import type { Provider } from '../provider/types';
 import { navigate } from '../ui/navigation';
 import { getFavs, mergeFavs } from '../storage/favorites';
 import { getVideos } from '../core/videos';

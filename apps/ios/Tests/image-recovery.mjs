@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {webkit} from 'playwright-core';
-const output=await build({entryPoints:['apps/ios/web/image-recovery.ts'],bundle:true,write:false,format:'iife',globalName:'Recovery'});
+const output=await build({entryPoints:['src/app/image-recovery.ts'],bundle:true,write:false,format:'iife',globalName:'Recovery'});
 const browser=await webkit.launch();
 try {
  const page=await browser.newPage();await page.goto('about:blank');

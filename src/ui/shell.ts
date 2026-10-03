@@ -2,9 +2,6 @@ import cssContent from '../css/style.css?inline';
 import { initializeStorage } from '../storage/initialize';
 
 export async function startInit(): Promise<void> {
-    window.stop();
-    document.open();
-    document.close();
     if (!document.documentElement) document.appendChild(document.createElement('html'));
     if (!document.head) document.documentElement.appendChild(document.createElement('head'));
     if (!document.body) document.documentElement.appendChild(document.createElement('body'));
@@ -21,7 +18,7 @@ export async function startInit(): Promise<void> {
     loading.textContent = 'Loading…';
     document.body.appendChild(loading);
     try { await initializeStorage(); loading.remove(); }
-    catch (error) { loading.textContent = 'Could not load KM data. Keep website data intact and reload to retry.'; throw error; }
+    catch (error) { loading.textContent = 'Could not load Ytb data. Reopen the app to retry.'; throw error; }
 }
 
 export function getGrid(): HTMLElement {

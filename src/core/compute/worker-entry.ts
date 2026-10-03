@@ -18,7 +18,7 @@ async function handle({ op, args = [] }: Request): Promise<unknown> {
     if (op === 'migrate') return db.migratePreferences(args[0]);
     const write = ['favorite-toggle', 'favorite-merge', 'highlight-save', 'scroll-save'].includes(op);
     return db.preferences(p => {
-        if (!p) throw new Error('KM storage not initialized');
+        if (!p) throw new Error('Ytb storage not initialized');
         let value: unknown;
         switch (op) {
             case 'favorites': value = p.favorites; break;
@@ -46,6 +46,7 @@ async function handle({ op, args = [] }: Request): Promise<unknown> {
     }, write);
 }
 self.onmessage = ({ data }: MessageEvent<Request>) => {
+    if (!data.op) return;
     const run = async () => {
         try { self.postMessage({ id: data.id, ok: true, value: await handle(data) }); }
         catch (error) { self.postMessage({ id: data.id, ok: false, error: error instanceof Error ? error.message : String(error) }); }

@@ -1,4 +1,4 @@
-import type { Provider } from '../provider';
+import type { Provider } from '../provider/types';
 import { navigate } from './navigation';
 
 export function createPagination(

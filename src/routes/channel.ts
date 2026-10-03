@@ -1,4 +1,4 @@
-import type { Provider } from '../provider';
+import type { Provider } from '../provider/types';
 import { navigate } from '../ui/navigation';
 import { fetchActorVideos, getCachedActorVideos } from '../core/actor-videos';
 import { startInit, getGrid } from '../ui/shell';

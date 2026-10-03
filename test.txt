@@ -1,10 +1,7 @@
 Tester prerequisites:
 
-- Run on an iPhone with Safari foregrounded.
-- The universal userscript-ios-test debugger must be enabled and granted access
-  to `ytboob.com`.
-- Disable other installed copies of km-explorer while the suite injects the
-  locally built userscript.
+- Run on the iPhone with the Ytb app in the foreground; inspect it with
+  ios-tools' inspector (see `apps/ios/PORT.md`).
 - The live provider must return enough entries to exercise multiple provider
   and client pages.
 - Tests that change Favorites must snapshot and restore the original Favorites
@@ -13,7 +10,7 @@ Tester prerequisites:
 Frozen critical behavior:
 
 1. Favorites home
-- Opening `https://ytboob.com/` replaces the provider page with km-explorer.
+- Opening Ytb shows Favorites, the app's `/` route.
 - `/` is Favorites and occupies the page-0 position in app navigation.
 - Every favorite is rendered in one grid, newest first.
 - Favorites is not divided into pages.
@@ -38,11 +35,11 @@ Frozen critical behavior:
 3. Listing position
 - On `scrollend` + 100 ms, the current listing position is saved.
 - Selecting a ready card leaves the listing through a real navigation.
-- One Safari Back swipe restores the listing from bfcache.
+- One Back swipe restores the listing from bfcache.
 - The restored document retains its DOM, active client page, ready-card state,
   and exact viewport position.
 - Back through bfcache removes the clicked card's transient Copied/busy state,
-  highlights exactly that card, and does not move Safari's restored viewport.
+  highlights exactly that card, and does not move the restored viewport.
 - The highlighted returned card is clickable again.
 - The last opened card identity is stored in localStorage.
 - A normal listing reload highlights and centers the stored card; bfcache
@@ -65,11 +62,9 @@ Frozen critical behavior:
 5. Opening a video
 - Selecting a ready card copies its media URL during the activating gesture.
 - The card then hard-navigates to that video's existing provider URL.
-- No km-explorer-specific video URL is invented.
-- A provider video URL is recognized and replaced by the km-explorer video
-  page.
-- The original Favorites or listing document remains available to Safari's
-  bfcache.
+- No Ytb-specific video URL is invented.
+- A provider video URL opens the Ytb video page.
+- The original Favorites or listing document remains available to bfcache.
 
 6. Video page
 - The selected video is displayed full width at the top of the page.
@@ -80,11 +75,11 @@ Frozen critical behavior:
 - A seekable progress bar appears below the time display and tracks playback.
 - A one-finger horizontal swipe on the video scrubs by 60 seconds per viewport
   width and resumes playback on release.
-- Vertical movement, multi-touch, and a swipe beginning in Safari's 28px
-  leading-edge Back area remain browser-owned.
+- Vertical movement, multi-touch, and a swipe beginning in the 28px
+  leading-edge Back area remain WebKit-owned.
 - Icon-only play/pause and mute/unmute controls appear below the progress bar.
-- The page does not automatically scroll after takeover or data loading.
-- Safari attempts to play the selected media.
+- The page does not automatically scroll after opening or data loading.
+- The app attempts to play the selected media.
 - The navigation-time media copy happens regardless of whether Safari
   successfully plays the video.
 - Playback failure does not prevent the rest of the video page from becoming
@@ -111,7 +106,7 @@ Frozen critical behavior:
 - Further actor-video selections continue replacing the current video history
   entry.
 - Video-to-video navigation does not add Back steps.
-- One Safari Back swipe from any replacement video returns directly to the
+- One Back swipe from any replacement video returns directly to the
   original Favorites or listing page.
 - The originating page is restored from bfcache with its previous viewport and
   card state.
@@ -139,16 +134,16 @@ Frozen critical behavior:
 Entry URLs:
 
 Favorites / client page 0:
-https://ytboob.com/
+ytb://app/
 
 Client listing page 1 positioned at provider page 2:
-https://ytboob.com/page/2/
+ytb://app/page/2/
 
-Known Safari-playable video:
-https://ytboob.com/purple-see-through-try-on-haul-4k-017/
+Known playable video:
+ytb://app/purple-see-through-try-on-haul-4k-017/
 
-Known Safari-unsupported video:
-https://ytboob.com/great-try-on-haul/
+Known unsupported video:
+ytb://app/great-try-on-haul/
 
 Both known playback cases belong to Zoe Hauls and provide the same actor-video
 grid for replacement-navigation checks.

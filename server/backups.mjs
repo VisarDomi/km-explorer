@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// PC backups for the Ytb app (`ytb`) and the KM Explorer userscript (`km-explorer`): HTTPS on port
-// 7733, a private access key, and per-phone files holding the current and at most one previous snapshot.
+// PC backups for the Ytb app: HTTPS on port 7733, a private access key, and per-phone files
+// holding the current and at most one previous snapshot.
 //   node server/backups.mjs          serve
 //   node server/backups.mjs status   print received backups (counts and labels only)
 import fs from 'node:fs';
@@ -12,9 +12,8 @@ import { pathToFileURL } from 'node:url';
 
 export const PORT = 7733;
 export const ROOT = path.join(os.homedir(), '.local/share/km-explorer/backups');
-const APPS = ['ytb', 'km-explorer'];
+const APPS = ['ytb'];
 const PROVIDERS = ['ytboob'];
-const ORIGINS = new Set(['https://ytboob.com']);
 const LIMIT = 50 * 1024 * 1024; // Includes URL/catalog caches, never video media.
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -111,7 +110,7 @@ function readBody(req) {
     });
 }
 
-/** Request handler for /api/reader-backups/<ytb|km-explorer>/ytboob[/<id>]. */
+/** Request handler for /api/reader-backups/ytb/ytboob[/<id>]. */
 export function handler(root) {
     const store = new BackupStore(root);
     const keyFile = path.join(root, 'access-key');
@@ -119,13 +118,6 @@ export function handler(root) {
     const key = Buffer.from(fs.readFileSync(keyFile, 'utf8').trim());
     return async (req, res) => {
         res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('Vary', 'Origin');
-        // Worker fetch is allowed only from the reader origin; every data request still requires the private key.
-        if (ORIGINS.has(req.headers.origin)) res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
-        if (req.method === 'OPTIONS') {
-            res.writeHead(204, { 'Access-Control-Allow-Methods': 'GET,PUT', 'Access-Control-Allow-Headers': 'Content-Type,X-Reader-Backup-Key' }).end();
-            return;
-        }
         const supplied = Buffer.from(String(req.headers['x-reader-backup-key'] ?? ''));
         if (key.length !== supplied.length || !timingSafeEqual(key, supplied)) return send(res, 401, { error: 'Backup access key required' });
         try {

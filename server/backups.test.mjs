@@ -16,7 +16,8 @@ function fixture() {
     return { root, store: new BackupStore(root), cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
-for (const app of ['ytb', 'km-explorer']) {
+{
+    const app = 'ytb';
     test(`${app} snapshots retain all caches, isolate phones, rotate once, and reject empty favorite loss`, () => {
         const { root, store, cleanup } = fixture();
         const id = randomUUID();
@@ -29,7 +30,6 @@ for (const app of ['ytb', 'km-explorer']) {
             const copy = store.put(app, 'ytboob', randomUUID(), { label: 'Restored phone', baseRevision: null, data: second.current.data });
             assert.notEqual(copy.id, id);
             assert.deepEqual(store.read(app, 'ytboob', id), second);
-            assert.equal(store.list(app === 'ytb' ? 'km-explorer' : 'ytb', 'ytboob').length, 0);
             assert.equal(fs.statSync(store.file(app, 'ytboob', id)).mode & 0o777, 0o600);
             assert.equal(fs.statSync(root).mode & 0o777, 0o700);
         } finally { cleanup(); }
@@ -40,13 +40,14 @@ test('invalid readers, IDs and snapshots are rejected', () => {
     const { store, cleanup } = fixture();
     try {
         assert.throws(() => store.list('gallery-reader', 'hitomi'));
+        assert.throws(() => store.list('km-explorer', 'ytboob'));
         assert.throws(() => store.list('../elsewhere', 'ytboob'));
         assert.throws(() => store.read('ytb', 'ytboob', '../secret'));
         assert.throws(() => store.put('ytb', 'ytboob', randomUUID(), { label: 'Phone', data: { version: 1, indexedDB: {} }, baseRevision: null }));
     } finally { cleanup(); }
 });
 
-test('HTTP backups require the private key, allow only the reader origin, and never cache', async t => {
+test('HTTP backups require the private key and never cache', async t => {
     const { root, cleanup } = fixture();
     const server = http.createServer(handler(root)).listen(0, '127.0.0.1');
     await new Promise(resolve => server.once('listening', resolve));
@@ -55,10 +56,7 @@ test('HTTP backups require the private key, allow only the reader origin, and ne
     const denied = await fetch(base);
     assert.equal(denied.status, 401);
     assert.equal(denied.headers.get('cache-control'), 'no-store');
-    const preflight = await fetch(base, { method: 'OPTIONS', headers: { Origin: 'https://ytboob.com', 'Access-Control-Request-Method': 'PUT' } });
-    assert.equal(preflight.status, 204);
-    assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://ytboob.com');
-    assert.equal((await fetch(base, { headers: { Origin: 'https://hitomi.la' } })).headers.get('access-control-allow-origin'), null);
+    assert.equal((await fetch(base, { headers: { Origin: 'https://ytboob.com' } })).headers.get('access-control-allow-origin'), null);
     const headers = { 'X-Reader-Backup-Key': fs.readFileSync(path.join(root, 'access-key'), 'utf8'), 'Content-Type': 'application/json' };
     const saved = await fetch(base + '/' + randomUUID(), { method: 'PUT', headers, body: JSON.stringify({ label: 'Phone', baseRevision: null, data: snapshot }) });
     assert.equal(saved.status, 200);

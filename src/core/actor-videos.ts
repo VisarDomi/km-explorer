@@ -1,4 +1,4 @@
-import type { Provider } from '../provider';
+import type { Provider } from '../provider/types';
 import { getCachedChannel, setCachedChannel } from '../storage/db';
 import type { VideoStub } from '../types';
 import { getVideos } from './videos';

@@ -11,7 +11,7 @@ export interface BackupCommand { action: string; scope: string; label?: string; 
 let dbPromise: Promise<IDBDatabase> | undefined;
 function database(): Promise<IDBDatabase> {
     return dbPromise ??= new Promise((resolve, reject) => {
-        const request = indexedDB.open('reader-pc-backup-state-v1', 1);
+        const request = indexedDB.open('ytb-pc-backup-state-v1', 1);
         const timer = setTimeout(() => reject(new Error('Backup database open timed out')), 10000);
         request.onupgradeneeded = () => request.result.createObjectStore('identities');
         request.onsuccess = () => {

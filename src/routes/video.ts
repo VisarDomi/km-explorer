@@ -1,4 +1,5 @@
-import type { Provider } from '../provider';
+import { appURL, copyText } from '../app/native';
+import type { Provider } from '../provider/types';
 import { fetchActorVideos, getCachedActorVideos } from '../core/actor-videos';
 import { getDetail, putDetail } from '../storage/db';
 import { startInit } from '../ui/shell';
@@ -53,7 +54,7 @@ function createPlayer(videoSrc: string): {
         try {
             // The destination owns the resolved source. This real tap grants
             // Safari clipboard access; navigation never tries to copy.
-            await navigator.clipboard.writeText(videoSrc);
+            await copyText(videoSrc);
             copy.textContent = 'Copied';
         } catch {
             copy.textContent = 'Copy failed — tap to retry';
@@ -182,7 +183,7 @@ function renderActorGrid(
     for (const video of videos) {
         const selected = sameProviderPage(video.pageUrl, selectedUrl);
         const card = createVideoCard(video, selected => {
-            window.location.replace(selected.pageUrl);
+            window.location.replace(appURL(selected.pageUrl));
         }, { disabled: selected });
         if (selected) {
             card.classList.add('selected');

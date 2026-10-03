@@ -1,4 +1,4 @@
-import type { Provider } from '../provider';
+import type { Provider } from '../provider/types';
 import { navigate } from '../ui/navigation';
 import { getAllVideos, putVideos } from '../storage/db';
 import { getGrid, startInit } from '../ui/shell';
