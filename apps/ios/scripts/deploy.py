@@ -3,7 +3,7 @@
 import argparse,json,pathlib,subprocess,shlex,sys
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 APP=ROOT/'apps/ios'
-MAC='/Users/visar/Developer/ytb/apps/ios'
+MAC='/Users/visar/Developer/km-explorer/apps/ios'
 SSH=['ssh','-o','BatchMode=yes','-o','ConnectTimeout=8','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile=/home/visar/Documents/hackingtosh/validation/macos-known-hosts','visar@192.168.1.198']
 DEVICE='00008101-000639912881401E'
 TEAM='65U58U86DD'
