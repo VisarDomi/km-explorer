@@ -75,6 +75,8 @@ require the iPhone.
 
 Ytb renews monthly through this repository's scheduler,
 `com.visar.renewal.km-explorer` ([ios-tools renewal](../../../../ios-tools/renewal/PAID-REFRESH.md));
-`scripts/renewal.py` lists its entry. Pause only that idle scheduler before
-updating approved build inputs; install and test, approve, verify renewal and
-resume it. The setup copy is `/home/visar/Documents/environment/mac-renewal`.
+`scripts/renewal.py` lists its entry. `deploy.py install` approves the installed
+build as the renewal baseline, keeping its renewal date, when neither its inputs nor
+the app changed since `deploy.py build`; otherwise it prints why approval was
+skipped. No scheduler pause is needed. The setup copy is
+`/home/visar/Documents/environment/mac-renewal`.
