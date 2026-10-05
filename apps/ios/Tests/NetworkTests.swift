@@ -13,6 +13,7 @@ final class NetworkFixture: URLProtocol, @unchecked Sendable {
             let response=HTTPURLResponse(url:url,statusCode:n == 2 ? 503 : 200,httpVersion:nil,headerFields:["Content-Type":"image/png","Retry-After":"0"])!
             client?.urlProtocol(self,didReceive:response,cacheStoragePolicy:.notAllowed)
             client?.urlProtocol(self,didLoad:Data([1,2,3,4])); client?.urlProtocolDidFinishLoading(self)
+        } else if url.path == "/missing-host" { client?.urlProtocol(self,didFailWithError:URLError(.cannotFindHost))
         } else { client?.urlProtocol(self,didFailWithError:URLError(.notConnectedToInternet)) }
     }
     override func stopLoading() {}
@@ -32,6 +33,9 @@ func check(_ condition: Bool, _ reason: String) throws { if !condition { throw N
             do { _ = try await api.request(input(host,path,method)); try check(false,"Should fail") } catch is URLError { }
             try check(NetworkFixture.count(host+path) == 1,"PC/write requests never loop")
         }
+        do { _ = try await api.request(input("fixture.invalid","/missing-host")); try check(false,"Missing host should fail") }
+        catch let error as URLError { try check(error.code == .cannotFindHost,"Missing host is reported") }
+        try check(NetworkFixture.count("fixture.invalid/missing-host") == 3,"Missing host is retried briefly, not forever")
         let task=Task { try await api.request(input("fixture.invalid","/cancel")) }
         try await Task.sleep(for:.milliseconds(40)); task.cancel()
         do { _ = try await task.value; try check(false,"Cancellation should stop retry") } catch is CancellationError {} catch let error as URLError { try check(error.code == .cancelled,"Canceled transport") }
@@ -46,6 +50,6 @@ func check(_ condition: Bool, _ reason: String) throws { if !condition { throw N
         let state=await reopened.viewState()
         try check(state.lastPath == "/video-one/" && state.libraryPath == "/actor/example/" && state.positions["video:/video-one/"]?.y == 200,"Reader and underlying list survive store recreation")
         print("PASS: search POST recovery and durable reader/list checkpoints")
-        print("PASS: actual URLSession loss/503 recovery, cancellation, prompt PC and no write replay")
+        print("PASS: actual URLSession loss/503 recovery, bounded missing-host retry, cancellation, prompt PC and no write replay")
     }
 }

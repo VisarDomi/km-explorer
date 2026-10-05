@@ -198,16 +198,23 @@ function renderActorGrid(
 
 export async function init(provider: Provider, videoUrl: string): Promise<void> {
     await startInit();
+    // An uncached source waits on the provider page; never leave the page blank.
+    const status = document.createElement('div');
+    status.className = 'ke-loading';
+    status.textContent = 'Loading video…';
+    document.body.appendChild(status);
     let detail: VideoDetail;
     try { detail = await loadDetail(provider, videoUrl); }
-    catch {
-        document.body.textContent = 'Could not load this video’s source. Reload to retry.';
+    catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        status.textContent = `Could not load this video’s source: ${reason.replace(/\.$/, '')}. Reload to retry.`;
         return;
     }
     if (!detail.videoSrc) {
-        document.body.textContent = 'No video source is available.';
+        status.textContent = 'No video source is available.';
         return;
     }
+    status.remove();
     const actor = detail.actors[0];
 
     const player = createPlayer(detail.videoSrc);
@@ -226,6 +233,12 @@ export async function init(provider: Provider, videoUrl: string): Promise<void> 
         renderActorGrid(cached, videoUrl);
     }
 
-    const fresh = await fetchActorVideos(provider, actor.url);
+    let fresh: VideoStub[];
+    try { fresh = await fetchActorVideos(provider, actor.url); }
+    catch (error) {
+        const grid = document.getElementById('ke-grid');
+        if (!cached && grid) grid.innerHTML = '<div class="ke-empty">Could not load actor videos</div>';
+        throw error;
+    }
     renderActorGrid(fresh, videoUrl);
 }

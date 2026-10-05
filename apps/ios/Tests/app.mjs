@@ -41,6 +41,7 @@ try {
             }
             if(url.pathname.startsWith('/wp-json/wp/v2/actors')) return JSON.stringify(payload([{id:7}]));
             if(url.pathname.startsWith('/wp-json/wp/v2/posts')) return JSON.stringify({...payload([{id:1},{id:2}]),headers:{'X-WP-TotalPages':'1'}});
+            if(url.pathname==='/video-missing/') throw new Error('A server with the specified hostname could not be found.');
             sourceRequests++;
             return JSON.stringify(payload(`<meta itemprop="contentURL" content="https://media.test/${url.pathname.split('/')[1]}.mp4"><a href="/actor/example/">Example</a>`));
         }
@@ -129,12 +130,17 @@ try {
     await reopened.goto('https://ytb.test/video-3/?variant=test');
     await reopened.waitForFunction(()=>!!window.ytbViewState);
     await reopened.evaluate(()=>dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'})));
+    await reopened.getByText('Loading video…',{exact:true}).waitFor();
     releaseDetail();detailGate=undefined;
     await reopened.locator('video').waitFor();
     await reopened.waitForTimeout(100);
     assert.equal(await reopened.evaluate(()=>scrollY),0,'Keyboard input cancels delayed native restoration');
     await reopened.evaluate(()=>window.ytbViewState.save());
     assert.equal(state.lastPath,'/video-3/?variant=test','Checkpoint preserves provider query');
+    // An unresolvable provider host reports its failure instead of a blank page.
+    await reopened.goto('https://ytb.test/video-missing/');
+    await reopened.getByText(/^Could not load this video’s source: .*hostname could not be found\. Reload to retry\.$/).waitFor();
+    assert.equal(await reopened.locator('video').count(),0);
     // Freeze during the initial render: cancel native metadata, then recover
     // this unfinished history entry on Back rather than leaving it on Loading.
     const blocked=deferred();actorGate=blocked.promise;releaseActor=blocked.resolve;

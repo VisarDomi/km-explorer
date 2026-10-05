@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Security
 
 // Only this LAN host may use the bundled PUBLIC local CA. TLS hostname and
@@ -38,6 +39,8 @@ struct HTTPResult: Codable, Sendable {
 
 actor YtbAPI {
     private let session: URLSession
+    private let waitingSession: URLSession
+    private let path = NWPathMonitor()
     private let origin: String
     private let pcHost: String
     private let pcSession: URLSession
@@ -51,8 +54,10 @@ actor YtbAPI {
         config.urlCache = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 64 * 1024 * 1024)
         let queue = OperationQueue(); queue.name = "Ytb.Network"; queue.maxConcurrentOperationCount = 1
         pcSession = URLSession(configuration: config, delegate: LocalTrust(host: pc.host ?? "", certificateURL: certificateURL), delegateQueue: queue)
-        config.waitsForConnectivity = true
         session = URLSession(configuration: config, delegate: LocalTrust(host: pc.host ?? "", certificateURL: certificateURL), delegateQueue: queue)
+        config.waitsForConnectivity = true
+        waitingSession = URLSession(configuration: config, delegate: LocalTrust(host: pc.host ?? "", certificateURL: certificateURL), delegateQueue: queue)
+        path.start(queue: DispatchQueue(label: "Ytb.Path"))
     }
     func request(_ input: Data) async throws -> (Data, HTTPURLResponse) {
         let args = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
@@ -66,8 +71,10 @@ actor YtbAPI {
         let read = ["GET", "HEAD"].contains(request.httpMethod ?? "GET") ||
             (request.httpMethod == "POST" && url.host == "ts-api.ytboob.com" && url.path == "/multi_search")
         let retry = url.host != pcHost && read
-        let client = url.host == pcHost ? pcSession : session
         let (data,response) = try await recoverNetworkRead(enabled: retry) {
+            // Offline, wait for a network. Online, fail fast: waiting would hold an
+            // unresolvable host for the whole resource timeout, then retry it forever.
+            let client = url.host == pcHost ? pcSession : path.currentPath.status == .satisfied ? session : waitingSession
             let result = try await client.data(for: request)
             if retry { try retryableResponse(result.1) }
             return result

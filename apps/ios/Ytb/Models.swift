@@ -47,7 +47,7 @@ func retryableResponse(_ response: URLResponse) throws {
     throw RetryableResponse(after: after.flatMap { $0.isFinite ? max(0, $0) : nil })
 }
 func recoverNetworkRead<T>(enabled: Bool = true, isolation: isolated (any Actor)? = #isolation, _ operation: () async throws -> T) async throws -> T {
-    var delay = 1.0
+    var delay = 1.0, unresolved = 0
     while true {
         try Task.checkCancellation()
         do { return try await operation() }
@@ -58,6 +58,9 @@ func recoverNetworkRead<T>(enabled: Bool = true, isolation: isolated (any Actor)
                 .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed].contains($0.code) } ?? false
             let response = error as? RetryableResponse
             guard enabled && (transient || response != nil) else { throw error }
+            // A nonexistent host (e.g. a suspended domain) does not recover by waiting;
+            // allow a network switch to settle, then report it instead of looping.
+            if network?.code == .cannotFindHost { unresolved += 1; if unresolved >= 3 { throw error } }
             let seconds = max(delay, response?.after ?? 0)
             try await Task.sleep(for: .seconds(seconds))
             delay = min(delay * 2, 30)
