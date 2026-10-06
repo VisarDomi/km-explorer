@@ -39,7 +39,8 @@ Home has Import / Merge and Export controls. An unavailable PC stays silent.
 
 Start with `/home/visar/Documents/environment/mac-access.md`. Mac Ethernet:
 `192.168.1.198`, SSH user `visar`; USB wireless remains DHCP. Use the trusted SSH
-options in that document. The Mac mirror is `/Users/visar/Developer/km-explorer/apps/ios`.
+options in that document; when Ethernet is down, SSH falls back to the Mac's Wi-Fi
+automatically (`mac-connect --check`). The Mac mirror is `/Users/visar/Developer/km-explorer/apps/ios`.
 
 From this repository on Linux:
 
