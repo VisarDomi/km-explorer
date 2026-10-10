@@ -219,6 +219,14 @@ export async function init(provider: Provider, videoUrl: string): Promise<void> 
 
     const player = createPlayer(detail.videoSrc);
     document.body.appendChild(player.root);
+    // Where this video was left when the app last went away, so a reload after iOS ended the
+    // page carries on from there.
+    const timeKey = `ke-video-time:${videoUrl}`;
+    const savedTime = Number(localStorage.getItem(timeKey));
+    if (savedTime > 0) player.video.addEventListener('loadedmetadata', () => { player.video.currentTime = savedTime; }, { once: true });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && player.video.isConnected) localStorage.setItem(timeKey, String(player.video.currentTime));
+    });
     void player.video.play().catch(() => {
         // The controls remain available when autoplay is rejected.
     });

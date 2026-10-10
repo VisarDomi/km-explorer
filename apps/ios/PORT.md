@@ -19,7 +19,9 @@ and PC networking and clipboard access. The app loads bundled documents at
 real document history; related videos replace the current document.
 
 Cold launch restores the library, then the reader, keeping a Back destination
-underneath a resumed video. View checkpoints are atomic native writes; IndexedDB
+underneath a resumed video. A video resumes where it was when the app last went away
+(`ke-video-time:<url>` in localStorage), so a reload after iOS ended the page does not
+start it over. View checkpoints are atomic native writes; IndexedDB
 owns favorites and caches. Workers end on pagehide and are recreated on Back, so a
 frozen page never holds an IndexedDB transaction that blocks the next document.
 Existing stores are checked read-only at startup; initialization writes only for a
